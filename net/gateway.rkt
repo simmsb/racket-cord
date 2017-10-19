@@ -1,13 +1,15 @@
 #lang racket
 
 (require net/rfc6455
+         racket/hash
          json
          simple-http
          "http.rkt")
 
-(struct client-ws
+(struct ws-client
   (ws
-   heartbeat-thread
+   client
+   [heartbeat-thread #:mutable]
    [seq #:mutable]))
 
 (define op-dispatch  0)
@@ -33,7 +35,7 @@
   (ws-connect (get-ws-url requester)))
 
 (define (new-client requester)
-  (client-ws (connect-ws requester)
+  (ws-client (connect-ws requester)
              'nil
              null))
 
@@ -42,10 +44,41 @@
                   'op op-heartbeat
                   'd seq)))
 
-(define (heartbeater ws interval)
+(define (json-ws-read ws)
+  (match (ws-recv ws #:payload-type 'text)
+    [eof eof]
+    [x (string->jsexpr x)]))
+
+(define (send-heartbeat ws seq)
+  (ws-send! ws (make-heartbeat seq)))
+
+(define (accept-hello client data)
+  (set-ws-client-heartbeat-thread! (heartbeater client (/ (hash-ref data 'heartbeat_interval) 1000))))
+
+(define (ws-loop client)
   (thread
    (lambda ()
      (let loop ()
-       (ws-send! (client-ws-ws ws) (make-heartbeat (client-ws-seq ws)))
+       (match (json-ws-read (ws-client-ws client))
+         [eof #f]
+         [(hash-table ('op op-dispatch) ('d d) ('s s) ('t t))
+          (set-ws-client-seq! s)
+          (dispatch-event client d s t)] ;; TODO: decide on how we dispatch events
+         [(hash-table ('op o) ('d d))
+          (match o
+            [op-heartbeat (send-heartbeat (ws-client-ws client) (ws-client-seq client))]
+            [op-reconnect (trigger-reconnect client)] ;; TODO: implement
+            [op-invalid-session (if d
+                                    (send-resume client) ;; TODO: implement
+                                    (send-identify client))] ;; TODO: implement
+            [op-hello (accept-hello client d)]
+            [op-heartbeat-ack (accept-heartbeat client)])])
+       (loop)))))
+
+(define (heartbeater client interval)
+  (thread
+   (lambda ()
+     (let loop ()
+       (send-heartbeat (ws-client-ws client) (ws-client-seq client))
        (sleep interval)
        (loop)))))

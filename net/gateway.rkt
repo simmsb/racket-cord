@@ -8,8 +8,10 @@
 
 (struct ws-client
   (ws
-   client
+   token
+   [gateway-url #:mutable]
    [heartbeat-thread #:mutable]
+   [heartbeat-delta #:mutable]
    [seq #:mutable]))
 
 (define op-dispatch  0)
@@ -31,13 +33,19 @@
   (string-append* (dict-ref (json-response-body (gateway requester)) 'url)
                   gateway-params))
 
-(define (connect-ws requester)
-  (ws-connect (get-ws-url requester)))
+(define (startup-ws url)
+  (ws-connect url))
 
-(define (new-client requester)
-  (ws-client (connect-ws requester)
-             'nil
-             null))
+(define (new-ws-client token)
+  (let ([requester (make-discord-http token)]
+        [url (get-ws-url requester)])
+    (ws-client (startup-ws url)
+               token
+               url
+               'nil
+               0
+               'null)))
+
 
 (define (make-heartbeat seq)
   (jsexpr->string (hasheq
@@ -45,9 +53,11 @@
                   'd seq)))
 
 (define (json-ws-read ws)
-  (match (ws-recv ws #:payload-type 'text)
-    [eof eof]
-    [x (string->jsexpr x)]))
+  (let ([data (ws-recv ws #:payload-type 'text)])
+    (displayln data) ;; DEBUG
+    (match data
+      [eof eof]
+      [x (string->jsexpr x)])))
 
 (define (send-heartbeat ws seq)
   (ws-send! ws (make-heartbeat seq)))
@@ -55,9 +65,26 @@
 (define (accept-hello client data)
   (set-ws-client-heartbeat-thread! (heartbeater client (/ (hash-ref data 'heartbeat_interval) 1000))))
 
+(define (make-identify token) ;; TODO: more args
+  (hasheq
+   'token token
+   'properties (hasheq))
+  )
+
+(define (send-identify client) 'nil)
+
+(define (send-resume client) 'nil)
+
+(define (accept-heartbeat client) 'nil)
+
+(define (trigger-reconnect client) 'nil)
+
+(define (dispatch-event cleint d s t) 'nil)
+
 (define (ws-loop client)
   (thread
    (lambda ()
+     (send-identify client)
      (let loop ()
        (match (json-ws-read (ws-client-ws client))
          [eof #f]
@@ -70,7 +97,9 @@
             [op-reconnect (trigger-reconnect client)] ;; TODO: implement
             [op-invalid-session (if d
                                     (send-resume client) ;; TODO: implement
-                                    (send-identify client))] ;; TODO: implement
+                                    (begin
+                                      (sleep (random 1 5))
+                                      (send-identify client)))]
             [op-hello (accept-hello client d)]
             [op-heartbeat-ack (accept-heartbeat client)])])
        (loop)))))

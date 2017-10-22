@@ -5,8 +5,8 @@
 
 (provide make-discord-http
          discord-url
-         gateway
-         gateway-bot
+         get-gateway
+         get-gateway-bot
          create-message)
 
 (define (make-discord-http token)
@@ -18,12 +18,12 @@
          "User-Agent: DiscordBot (https://github.com/nitros12/racket-cord, 0.0)")))
 
 (define (discord-url . parts)
-  (string-join (append '("api" "v6") parts) "/"))
+  (format "/api/v6/~a" (string-join parts "/")))
 
-(define (gateway requester)
+(define (get-gateway requester)
   (get requester (discord-url "gateway")))
 
-(define (gateway-bot requester)
+(define (get-gateway-bot requester)
   (get requester (discord-url "gateway" "bot")))
 
 (define (create-message requester ch-id payload)

@@ -1,3 +1,9 @@
 #lang racket
 
-(struct client (ws requester))
+(provide (all-defined-out))
+
+(struct client
+  (shards
+   user
+   events)
+  #:mutable)

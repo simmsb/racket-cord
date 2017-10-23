@@ -5,22 +5,14 @@
          racket/hash
          json
          simple-http
-         "http.rkt")
+         "http.rkt"
+         "data.rkt"
+         "events.rkt")
 
-(provide ws-client
-         new-ws-client
+(provide new-ws-client
          connect
          disconnect)
 
-(struct ws-client
-  ([ws #:mutable]
-   token
-   gateway-url
-   shard-id
-   [heartbeat-thread #:mutable] ;; TODO: pass shard id's
-   [recv-thread #:mutable]
-   [heartbeat-delta #:mutable]
-   [seq #:mutable]))
 
 (define op-dispatch  0)
 (define op-heartbeat 1)
@@ -41,14 +33,19 @@
   (string-append (dict-ref (json-response-body (get-gateway req)) 'url)
                  gateway-params))
 
-(define (new-ws-client token shard-id)
+(define (new-ws-client parent token shard-id)
   (let ([req (make-discord-http token)])
-    (ws-client 'nil
+    (ws-client null ;; ws
                token
-               (string->url (get-ws-url req))
+               parent ;; client parent
+               (string->url (get-ws-url req)) ;; gateway url
                shard-id
-               'nil
-               'nil
+               (make-hash) ;; guilds
+               (make-hash) ;; private-channels
+               #f ;; ready
+               null ;; session-id
+               null ;; heartbeat-thread
+               null ;; recv-thread
                0
                null)))
 
@@ -68,7 +65,7 @@
 (define (accept-hello client data)
   (set-ws-client-heartbeat-thread! client (heartbeater client (/ (hash-ref data 'heartbeat_interval) 1000))))
 
-(define (make-identify token) ;; TODO: more args
+(define (make-identify token shard presence) ;; TODO: more args
   (jsexpr->string
    (hasheq
     'op op-identifiy
@@ -81,13 +78,28 @@
         'compress #f
         'large_threshold 50
         'v 6
-        'shard '(0 1)))))
+        'shard shard))))
+
+(define (make-resume token session-id seq)
+  (jsexpr->string
+   (hasheq
+    'op op-resume
+    'd (hasheq
+        'token token
+        'session_id session-id
+        'seq seq))))
 
 (define (send-identify client)
   (displayln "IDENTIFYING")
-  (ws-send! (ws-client-ws client) (make-identify (ws-client-token client))))
+  (ws-send! (ws-client-ws client) (make-identify (ws-client-token client)
+                                                 (ws-client-shard-id client)
+                                                 (hasheq))))
 
-(define (send-resume client) 'nil)
+(define (send-resume client)
+  (displayln "RESUMING")
+  (ws-send! (ws-client-ws client) (make-resume (ws-client-token client)
+                                               (ws-client-session-id client)
+                                               (ws-client-seq client))))
 
 (define (accept-heartbeat client)
   (set-ws-client-heartbeat-delta! client (sub1 (ws-client-heartbeat-delta client)))
@@ -97,9 +109,6 @@
   (disconnect client)
   (connect client))
 
-(define (dispatch-event client d s t)
-  (printf "DISPATCHING EVENT: ~a ~a ~a" d s t))
-
 (define (connect client)
   (set-ws-client-ws! client (ws-connect (ws-client-gateway-url client)))
   (set-ws-client-seq! client null)
@@ -108,7 +117,7 @@
 
 (define (disconnect client)
   (kill-thread (ws-client-heartbeat-thread client))
-  (set-ws-client-heartbeat-thread! client 'nil)
+  (set-ws-client-heartbeat-thread! client null)
   (ws-close! (ws-client-ws client)))
 
 (define (ws-loop client)
@@ -120,7 +129,7 @@
            [(hash-table ('op o) ('d d) ('s s) ('t t))
             (match o
               [(== op-dispatch) (set-ws-client-seq! client s)
-                               (dispatch-event client d s t)]
+                               (dispatch-event client d t)]
               [(== op-heartbeat) (send-heartbeat (ws-client-ws client) (ws-client-seq client))]
               [(== op-reconnect) (trigger-reconnect client) (exit)] ;; TODO: implement
               [(== op-invalid-session) (if d

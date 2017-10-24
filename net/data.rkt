@@ -16,7 +16,7 @@
    [session-id #:mutable]
    [heartbeat-thread #:mutable]
    [recv-thread #:mutable]
-   [heartbeat-delta #:mutable]
+   [heartbeat-delta #:mutable] ;; TODO: if delta becomes higher than 2 kill a shard
    [seq #:mutable]))
 
 (define (maybe-parse data parser)

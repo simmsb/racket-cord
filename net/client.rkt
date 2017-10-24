@@ -5,5 +5,6 @@
 (struct client
   (shards
    user
+   event-consumer
    events)
   #:mutable)

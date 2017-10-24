@@ -102,8 +102,7 @@
                                                (ws-client-seq client))))
 
 (define (accept-heartbeat client)
-  (set-ws-client-heartbeat-delta! client (sub1 (ws-client-heartbeat-delta client)))
-  (send-heartbeat (ws-client-ws client) (ws-client-seq client)))
+  (set-ws-client-heartbeat-delta! client (sub1 (ws-client-heartbeat-delta client))))
 
 (define (trigger-reconnect client)
   (disconnect client)
@@ -128,19 +127,26 @@
          (match (json-ws-read (ws-client-ws client))
            [(hash-table ('op o) ('d d) ('s s) ('t t))
             (match o
-              [(== op-dispatch) (set-ws-client-seq! client s)
-                               (dispatch-event client d t)]
-              [(== op-heartbeat) (send-heartbeat (ws-client-ws client) (ws-client-seq client))]
-              [(== op-reconnect) (trigger-reconnect client) (exit)] ;; TODO: implement
-              [(== op-invalid-session) (if d
-                                          (send-resume client) ;; TODO: implement
-                                          (begin
-                                            (sleep (random 1 5))
-                                            (send-identify client)))]
-              [(== op-hello) (accept-hello client d) (send-identify client)]
-              [(== op-heartbeat-ack) (accept-heartbeat client)]
+              [(== op-dispatch)
+               (set-ws-client-seq! client s)
+               (dispatch-event client d t)]
+              [(== op-heartbeat)
+               (send-heartbeat (ws-client-ws client) (ws-client-seq client))]
+              [(== op-reconnect)
+               (trigger-reconnect client)
+               (exit)] ;; TODO: implement
+              [(== op-invalid-session)
+               (if d
+                   (send-resume client) ;; TODO: implement
+                   (begin (sleep (random 1 5))
+                          (send-identify client)))]
+              [(== op-hello)
+               (accept-hello client d)
+               (send-identify client)]
+              [(== op-heartbeat-ack)
+               (accept-heartbeat client)]
               [_ (printf "Unhandled opcode: ~a\n" o)])]
-           [(? eof-object? _)  (sleep (/ 1 100)) #f]
+           [(? eof-object? _)  (sleep (/ 1 100)) #f] ;; TODO: check if we get EOF's only when WS is killed
            [x (printf "Unhandled response: ~a\n" x)])
          (loop))))))
 

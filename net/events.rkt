@@ -27,5 +27,15 @@
 (define (dispatch-event ws-client data type)
   (printf "DISAPTCHING EVENT: ~a" type)
   (case type
-    [("READY") (thread (lambda () (event-ready ws-client data)))]
-    [("GUILD_CREATE") (thread (lambda () (event-guild-create ws-client data)))]))
+    [("READY") (event-ready ws-client data)]
+    [("GUILD_CREATE") (event-guild-create ws-client data)]))
+
+(define (event-consumer client)
+  (thread
+   (lambda ()
+     (let loop ()
+       (match (thread-receive)
+         [(list ws data type)
+          (dispatch-event ws data type)
+          (loop)]
+         ['done null])))))

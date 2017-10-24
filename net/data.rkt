@@ -34,6 +34,7 @@
    afk-channel-id
    afk-timeout
    embed-enabled
+   embed-channel-id
    verification-level
    default-message-notifications
    explicit-content-filter
@@ -86,14 +87,20 @@
   #:transparent)
 
 (struct member
-  (id)
+  (user
+   nick
+   roles
+   joined_at
+   deaf
+   mute)
   #:mutable
   #:transparent) ;; TODO
 
 ;; TODO: eventually do these as macros
 (define (hash->guild data)
+  (println data)
   (guild
-    (hash-ref data 'id)
+    (hash-ref data 'id null)
     (hash-ref data 'name null)
     (hash-ref data 'icon null)
     (hash-ref data 'splash null)
@@ -118,7 +125,7 @@
     (hash-ref data 'unavailable null)
     (hash-ref data 'member_count null)
     (hash-ref data 'voice_states null)
-    (maybe-parse (hash-ref data 'members null) (lambda (d) (map hash->member d))) ;; like this?
+    (maybe-parse (hash-ref data 'members null) (lambda (d) (map hash->member d))) ;; TODO: generalise this
     (hash-ref data 'channels null)
     (hash-ref data 'presences null)))
 
@@ -152,4 +159,9 @@
 
 (define (hash->member data)
   (member
-   (hash-ref data 'id))) ;; TODO
+   (hash->user (hash-ref data 'user))
+   (hash-ref data 'nick null)
+   (hash-ref data 'roles)
+   (hash-ref data 'joined_at)
+   (hash-ref data 'deaf null)
+   (hash-ref data 'mute null)))

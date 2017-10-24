@@ -16,16 +16,16 @@
     (set-ws-client-session-id! ws-client session-id)
     (when (null? (client-user client))
       (set-client-user! client (hash->user user)))
-    (for ([guild guilds])
-      (dict-set! (ws-client-guilds ws-client) (hash-ref guild 'id) (hash->guild guild))) ;; these are only partials idk
+    (for ([guild-obj guilds])
+      (dict-set! (ws-client-guilds ws-client) (hash-ref guild-obj 'id) (hash->guild guild-obj))) ;; these are only partials idk
     (for ([priv private-channels])
       (dict-set! (ws-client-private-channels) (hash-ref priv 'id) (hash->channel priv)))))
 
 (define (event-guild-create ws-client data)
-  (dict-set! (ws-client-guilds ws-client) (hash-ref data 'id) (hash->guild guild)))
+  (dict-set! (ws-client-guilds ws-client) (hash-ref data 'id) (hash->guild data)))
 
 (define (dispatch-event ws-client data type)
-  (printf "DISAPTCHING EVENT: ~a" type)
+  (printf "DISAPTCHING EVENT: ~a ~a" type data)
   (case type
     [("READY") (event-ready ws-client data)]
     [("GUILD_CREATE") (event-guild-create ws-client data)]))

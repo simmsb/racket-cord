@@ -134,10 +134,10 @@
                (send-heartbeat (ws-client-ws client) (ws-client-seq client))]
               [(== op-reconnect)
                (trigger-reconnect client)
-               (exit)] ;; TODO: implement
+               (exit)]
               [(== op-invalid-session)
                (if d
-                   (send-resume client) ;; TODO: implement
+                   (send-resume client)
                    (begin (sleep (random 1 5))
                           (send-identify client)))]
               [(== op-hello)

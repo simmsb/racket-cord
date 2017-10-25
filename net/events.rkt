@@ -1,11 +1,11 @@
 #lang racket
 
-(require "data.rkt"
-         "client.rkt")
+(require "data.rkt")
 
 (provide event-ready
          event-guild-create
-         dispatch-event)
+         dispatch-event
+         event-consumer)
 
 (define (event-ready ws-client data)
   (let ([client (ws-client-client ws-client)]
@@ -30,7 +30,7 @@
     [("READY") (event-ready ws-client data)]
     [("GUILD_CREATE") (event-guild-create ws-client data)]))
 
-(define (event-consumer client)
+(define (event-consumer)
   (thread
    (lambda ()
      (let loop ()

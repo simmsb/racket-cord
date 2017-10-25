@@ -3,11 +3,21 @@
 (require simple-http
          racket/string)
 
-(provide make-discord-http
+(provide http-request-loop
+         make-discord-http
          discord-url
          get-gateway
          get-gateway-bot
          create-message)
+
+(define (http-request-loop)
+  (thread
+   (lambda ()
+     (let loop ()
+       (match (thread-receive) ;; TODO: ratelimit impl
+         [(list endpoint caller params) (thread-send caller (apply endpoint params))]
+         [_ null])
+       (loop)))))
 
 (define (make-discord-http token)
   (update-headers

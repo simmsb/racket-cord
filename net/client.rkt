@@ -1,10 +1,21 @@
 #lang racket
 
-(provide (all-defined-out))
+(require "data.rkt"
+         "events.rkt"
+         "http.rkt")
 
-(struct client
-  (shards
-   user
-   event-consumer
-   events)
-  #:mutable)
+(provide make-client
+         make-request)
+
+(define (make-client token shards)
+  (client shards
+          null
+          (event-consumer)
+          (make-hash)
+          (make-discord-http token)
+          (http-request-loop)
+          token))
+
+(define (make-request client endpoint . args) ;; make a request on the http loop
+  (thread-send (client-http-loop client) (list endpoint (current-thread) args))
+  (thread-receive))

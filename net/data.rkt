@@ -2,7 +2,26 @@
 
 (require racket/hash)
 
-(provide (all-defined-out))
+(provide (struct-out client)
+         (struct-out ws-client)
+         (struct-out guild)
+         (struct-out channel)
+         (struct-out user)
+         (struct-out member)
+         hash->guild
+         hash->channel
+         hash->user
+         hash->member)
+
+(struct client
+  (shards
+   user
+   event-consumer
+   events
+   requester
+   http-loop
+   token)
+  #:mutable)
 
 (struct ws-client
   ([ws #:mutable]
@@ -16,13 +35,8 @@
    [session-id #:mutable]
    [heartbeat-thread #:mutable]
    [recv-thread #:mutable]
-   [heartbeat-delta #:mutable] ;; TODO: if delta becomes higher than 2 kill a shard
+   [heartbeat-received #:mutable] ;; TODO: if delta becomes higher than 2 kill a shard
    [seq #:mutable]))
-
-(define (maybe-parse data parser)
-  (if (null? data)
-      null
-      (parser data)))
 
 (struct guild
   (id
@@ -94,46 +108,50 @@
    deaf
    mute)
   #:mutable
-  #:transparent) ;; TODO
+  #:transparent)
+
+(define (extract-and-parse data value parser)
+  (match (hash-ref data value null)
+    [(? null?) null]
+    [x (map parser x)]))
 
 ;; TODO: eventually do these as macros
 (define (hash->guild data)
-  (println data)
   (guild
-    (hash-ref data 'id null)
-    (hash-ref data 'name null)
-    (hash-ref data 'icon null)
-    (hash-ref data 'splash null)
-    (hash-ref data 'owner_id null)
-    (hash-ref data 'region null)
-    (hash-ref data 'afk_channel_id null)
-    (hash-ref data 'afk_timeout null)
-    (hash-ref data 'embed_enabled null)
-    (hash-ref data 'embed_channel_id null)
-    (hash-ref data 'verification_level null)
-    (hash-ref data 'default_message_notifications null)
-    (hash-ref data 'explicit_content_filter null)
-    (hash-ref data 'roles null)
-    (hash-ref data 'emojis null)
-    (hash-ref data 'features null)
-    (hash-ref data 'mfa_level null)
-    (hash-ref data 'application_id null)
-    (hash-ref data 'widget_enabled null)
-    (hash-ref data 'widget_channel_id null)
-    (hash-ref data 'joined_at null)
-    (hash-ref data 'large null)
-    (hash-ref data 'unavailable null)
-    (hash-ref data 'member_count null)
-    (hash-ref data 'voice_states null)
-    (maybe-parse (hash-ref data 'members null) (lambda (d) (map hash->member d))) ;; TODO: generalise this
-    (hash-ref data 'channels null)
-    (hash-ref data 'presences null)))
+   (hash-ref data 'id null)
+   (hash-ref data 'name null)
+   (hash-ref data 'icon null)
+   (hash-ref data 'splash null)
+   (hash-ref data 'owner_id null)
+   (hash-ref data 'region null)
+   (hash-ref data 'afk_channel_id null)
+   (hash-ref data 'afk_timeout null)
+   (hash-ref data 'embed_enabled null)
+   (hash-ref data 'embed_channel_id null)
+   (hash-ref data 'verification_level null)
+   (hash-ref data 'default_message_notifications null)
+   (hash-ref data 'explicit_content_filter null)
+   (hash-ref data 'roles null)
+   (hash-ref data 'emojis null)
+   (hash-ref data 'features null)
+   (hash-ref data 'mfa_level null)
+   (hash-ref data 'application_id null)
+   (hash-ref data 'widget_enabled null)
+   (hash-ref data 'widget_channel_id null)
+   (hash-ref data 'joined_at null)
+   (hash-ref data 'large null)
+   (hash-ref data 'unavailable null)
+   (hash-ref data 'member_count null)
+   (hash-ref data 'voice_states null)
+   (extract-and-parse data 'members hash->member)
+   (extract-and-parse data 'channels hash->channel)
+   (hash-ref data 'presences null)))
 
 (define (hash->channel data)
   (channel
    (hash-ref data 'id)
    (hash-ref data 'type null)
-   (hash-ref data 'guild_id)
+   (hash-ref data 'guild_id null) ;; TODO: parse timestamps
    (hash-ref data 'position null)
    (hash-ref data 'permission_overwrites null)
    (hash-ref data 'name null)

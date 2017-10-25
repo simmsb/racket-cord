@@ -7,7 +7,8 @@
          simple-http
          "http.rkt"
          "data.rkt"
-         "events.rkt")
+         "events.rkt"
+         "client.rkt")
 
 (provide new-ws-client
          connect
@@ -33,21 +34,20 @@
   (string-append (dict-ref (json-response-body (get-gateway req)) 'url)
                  gateway-params))
 
-(define (new-ws-client parent token shard-id)
-  (let ([req (make-discord-http token)])
-    (ws-client null ;; ws
-               token
-               parent ;; client parent
-               (string->url (get-ws-url req)) ;; gateway url
-               shard-id
-               (make-hash) ;; guilds
-               (make-hash) ;; private-channels
-               #f ;; ready
-               null ;; session-id
-               null ;; heartbeat-thread
-               null ;; recv-thread
-               0
-               null)))
+(define (new-ws-client parent shard-id)
+  (ws-client null ;; ws
+             (client-token parent)
+             parent ;; client parent
+             (string->url (get-ws-url (client-requester parent))) ;; gateway url
+             shard-id
+             (make-hash) ;; guilds
+             (make-hash) ;; private-channels
+             #f ;; ready
+             null ;; session-id
+             null ;; heartbeat-thread
+             null ;; recv-thread
+             #t
+             null))
 
 
 (define (make-heartbeat seq)
@@ -101,9 +101,6 @@
                                                (ws-client-session-id client)
                                                (ws-client-seq client))))
 
-(define (accept-heartbeat client)
-  (set-ws-client-heartbeat-delta! client (sub1 (ws-client-heartbeat-delta client))))
-
 (define (trigger-reconnect client)
   (disconnect client)
   (connect client))
@@ -111,7 +108,7 @@
 (define (connect client)
   (set-ws-client-ws! client (ws-connect (ws-client-gateway-url client)))
   (set-ws-client-seq! client null)
-  (set-ws-client-heartbeat-delta! client 0)
+  (set-ws-client-heartbeat-received! client #t)
   (set-ws-client-recv-thread! client (ws-loop client)))
 
 (define (disconnect client)
@@ -129,9 +126,9 @@
             (match o
               [(== op-dispatch)
                (set-ws-client-seq! client s)
-               (dispatch-event client d t)]
+               (thread-send (client-event-consumer (ws-client-client client)) (list client d t))]
               [(== op-heartbeat)
-               (send-heartbeat (ws-client-ws client) (ws-client-seq client))]
+               (send-heartbeat client)]
               [(== op-reconnect)
                (trigger-reconnect client)
                (exit)]
@@ -144,20 +141,26 @@
                (accept-hello client d)
                (send-identify client)]
               [(== op-heartbeat-ack)
-               (accept-heartbeat client)]
+               (set-ws-client-heartbeat-received! client #t)]
               [_ (printf "Unhandled opcode: ~a\n" o)])]
-           [(? eof-object? _)  (sleep (/ 1 100)) #f] ;; TODO: check if we get EOF's only when WS is killed
+           [(? eof-object?) (println "WS GAVE EOF: RECONNECTING") (trigger-reconnect client)] ;; TODO: detect if we're looping
            [x (printf "Unhandled response: ~a\n" x)])
-         (loop))))))
+         (loop))
+       (printf "WS LOOP ON SHARD: ~a EXITING" (ws-client-shard-id client))))))
 
-(define (send-heartbeat ws seq)
-  (ws-send! ws (make-heartbeat seq)))
+(define (send-heartbeat client)
+  (if (ws-client-heartbeat-received client)
+      (ws-send! (ws-client-ws client) (make-heartbeat (ws-client-seq client)))
+      (begin
+        (println "WS DID NOT BEAT: RECONNECTING")
+        (trigger-reconnect client)))
+  (set-ws-client-heartbeat-received! client #f))
 
 (define (heartbeater client interval)
   (printf "Starting to heartbeat at a period of ~as" interval)
   (thread
    (lambda ()
      (let loop ()
-       (send-heartbeat (ws-client-ws client) (ws-client-seq client))
+       (send-heartbeat client)
        (sleep interval)
        (loop)))))

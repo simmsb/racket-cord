@@ -40,8 +40,6 @@
              parent ;; client parent
              (string->url (get-ws-url (client-requester parent))) ;; gateway url
              shard-id
-             (make-hash) ;; guilds
-             (make-hash) ;; private-channels
              #f ;; ready
              null ;; session-id
              null ;; heartbeat-thread
@@ -89,11 +87,12 @@
         'session_id session-id
         'seq seq))))
 
-(define (send-identify client)
+(define (send-identify client presence)
   (displayln "IDENTIFYING")
   (ws-send! (ws-client-ws client) (make-identify (ws-client-token client)
-                                                 (ws-client-shard-id client)
-                                                 (hasheq))))
+                                                 (list (ws-client-shard-id client)
+                                                       (length (client-shards (ws-client-client client))))
+                                                 presence)))
 
 (define (send-resume client)
   (displayln "RESUMING")
@@ -136,10 +135,10 @@
                (if d
                    (send-resume client)
                    (begin (sleep (random 1 5))
-                          (send-identify client)))]
+                          (send-identify client (hash))))]
               [(== op-hello)
                (accept-hello client d)
-               (send-identify client)]
+               (send-identify client (hash))] ;; TODO: sort out presence passing
               [(== op-heartbeat-ack)
                (set-ws-client-heartbeat-received! client #t)]
               [_ (printf "Unhandled opcode: ~a\n" o)])]

@@ -1,6 +1,7 @@
 #lang racket
 
-(require racket/hash)
+(require racket/hash
+         "utils.rkt")
 
 (provide (struct-out client)
          (struct-out ws-client)
@@ -16,6 +17,8 @@
 (struct client
   (shards
    user
+   guilds
+   private-channels
    event-consumer
    events
    requester
@@ -29,17 +32,16 @@
    client
    gateway-url
    shard-id
-   guilds
-   private-channels
    [ready #:mutable]
    [session-id #:mutable]
    [heartbeat-thread #:mutable]
    [recv-thread #:mutable]
-   [heartbeat-received #:mutable] ;; TODO: if delta becomes higher than 2 kill a shard
+   [heartbeat-received #:mutable]
    [seq #:mutable]))
 
 (struct guild
-  (id
+  (shard-id
+   id
    name
    icon
    splash
@@ -111,13 +113,12 @@
   #:transparent)
 
 (define (extract-and-parse data value parser)
-  (match (hash-ref data value null)
-    [(? null?) null]
-    [x (map parser x)]))
+  (bindmap parser (hash-ref data value null)))
 
 ;; TODO: eventually do these as macros
-(define (hash->guild data)
+(define (hash->guild shard-id data)
   (guild
+   shard-id
    (hash-ref data 'id null)
    (hash-ref data 'name null)
    (hash-ref data 'icon null)

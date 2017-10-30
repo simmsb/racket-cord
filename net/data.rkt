@@ -9,10 +9,14 @@
          (struct-out channel)
          (struct-out user)
          (struct-out member)
+         (struct-out message)
+         (struct-out role)
          hash->guild
          hash->channel
          hash->user
-         hash->member)
+         hash->member
+         hash->message
+         hash->role)
 
 (struct client
   (shards
@@ -30,14 +34,15 @@
   ([ws #:mutable]
    token
    client
-   gateway-url
+   [gateway-url #:mutable]
    shard-id
    [ready #:mutable]
    [session-id #:mutable]
    [heartbeat-thread #:mutable]
    [recv-thread #:mutable]
    [heartbeat-received #:mutable]
-   [seq #:mutable]))
+   [seq #:mutable]
+   [reconnects #:mutable]))
 
 (struct guild
   (shard-id
@@ -112,14 +117,46 @@
   #:mutable
   #:transparent)
 
+(struct message
+  (id
+   channel-id
+   author
+   content
+   timestamp
+   edited-timestamp
+   tts
+   mention-everyone
+   mentions
+   mention-roles
+   attachments
+   embeds
+   reactions
+   pinned
+   type)
+  #:mutable
+  #:transparent)
+
+(struct role
+  (id
+   name
+   color
+   hoist
+   position
+   permissions
+   managed
+   mentionable)
+  #:mutable
+  #:transparent)
+
 (define (extract-and-parse data value parser)
-  (bindmap parser (hash-ref data value null)))
+  (bindmap (lambda (m) (list (hash-ref data 'id) (parser m)))
+           (hash-ref data value null)))
 
 ;; TODO: eventually do these as macros
 (define (hash->guild shard-id data)
   (guild
    shard-id
-   (hash-ref data 'id null)
+   (hash-ref data 'id)
    (hash-ref data 'name null)
    (hash-ref data 'icon null)
    (hash-ref data 'splash null)
@@ -132,7 +169,7 @@
    (hash-ref data 'verification_level null)
    (hash-ref data 'default_message_notifications null)
    (hash-ref data 'explicit_content_filter null)
-   (hash-ref data 'roles null)
+   (extract-and-parse data 'roles hash->role)
    (hash-ref data 'emojis null)
    (hash-ref data 'features null)
    (hash-ref data 'mfa_level null)
@@ -144,18 +181,18 @@
    (hash-ref data 'unavailable null)
    (hash-ref data 'member_count null)
    (hash-ref data 'voice_states null)
-   (extract-and-parse data 'members hash->member)
-   (extract-and-parse data 'channels hash->channel)
+   (bindap make-hash (extract-and-parse data 'members hash->member))
+   (bindap make-hash (extract-and-parse data 'channels hash->channel))
    (hash-ref data 'presences null)))
 
 (define (hash->channel data)
   (channel
    (hash-ref data 'id)
    (hash-ref data 'type null)
-   (hash-ref data 'guild_id null) ;; TODO: parse timestamps
-   (hash-ref data 'position null)
+   (hash-ref data 'guild_id) ;; TODO: parse timestamps
+   (hash-ref data 'position)
    (hash-ref data 'permission_overwrites null)
-   (hash-ref data 'name null)
+   (hash-ref data 'name)
    (hash-ref data 'topic null)
    (hash-ref data 'nsfw null)
    (hash-ref data 'last_message_id null)
@@ -170,7 +207,7 @@
 (define (hash->user data)
   (user
    (hash-ref data 'id)
-   (hash-ref data 'username null)
+   (hash-ref data 'username)
    (hash-ref data 'discriminator null)
    (hash-ref data 'avatar null)
    (hash-ref data 'bot null)
@@ -180,7 +217,36 @@
   (member
    (hash->user (hash-ref data 'user))
    (hash-ref data 'nick null)
-   (hash-ref data 'roles)
+   (extract-and-parse data 'roles hash->role)
    (hash-ref data 'joined_at)
    (hash-ref data 'deaf null)
    (hash-ref data 'mute null)))
+
+(define (hash->message data)
+  (message
+   (hash-ref data 'id)
+   (hash-ref data 'channel_id)
+   (hash->user (hash-ref data 'author))
+   (hash-ref data 'content)
+   (hash-ref data 'timestamp)
+   (hash-ref data 'edited_timestamp null)
+   (hash-ref data 'tts)
+   (hash-ref data 'mention_everyone)
+   (extract-and-parse data 'mentions hash->user)
+   (extract-and-parse data 'mention_roles hash->role)
+   (hash-ref data 'attachments)
+   (hash-ref data 'embeds)
+   (hash-ref data 'reactions null)
+   (hash-ref data 'pinned)
+   (hash-ref data 'type)))
+
+(define (hash->role data)
+  (role
+   (hash-ref data 'id)
+   (hash-ref data 'name)
+   (hash-ref data 'color)
+   (hash-ref data 'hoist)
+   (hash-ref data 'position)
+   (hash-ref data 'permissions)
+   (hash-ref data 'managed)
+   (hash-ref data 'mentionable)))

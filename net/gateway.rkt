@@ -45,7 +45,8 @@
              null ;; heartbeat-thread
              null ;; recv-thread
              #t
-             null))
+             null
+             0))
 
 
 (define (make-heartbeat seq)
@@ -55,7 +56,7 @@
 
 (define (json-ws-read ws)
   (let ([data (ws-recv ws #:payload-type 'text)])
-    (unless (eof-object? data) (println data))
+    ;;(unless (eof-object? data) (println data))
     (if (string? data)
         (string->jsexpr data)
         eof)))
@@ -76,7 +77,8 @@
         'compress #f
         'large_threshold 50
         'v 6
-        'shard shard))))
+        'shard shard
+        'presence presence))))
 
 (define (make-resume token session-id seq)
   (jsexpr->string
@@ -105,6 +107,9 @@
   (connect client))
 
 (define (connect client)
+  (when (> (ws-client-reconnects client) 3)
+    (set-ws-client-reconnects! client 0)
+    (set-ws-client-gateway-url! client (string->url (get-ws-url (client-requester (ws-client-client client))))))
   (set-ws-client-ws! client (ws-connect (ws-client-gateway-url client)))
   (set-ws-client-seq! client null)
   (set-ws-client-heartbeat-received! client #t)
@@ -117,7 +122,7 @@
 
 (define (ws-loop client)
   (thread
-   (lambda ()
+   (thunk
      (let exit ()
        (let loop ()
          (match (json-ws-read (ws-client-ws client))
@@ -158,7 +163,7 @@
 (define (heartbeater client interval)
   (printf "Starting to heartbeat at a period of ~as" interval)
   (thread
-   (lambda ()
+   (thunk
      (let loop ()
        (send-heartbeat client)
        (sleep interval)

@@ -32,6 +32,23 @@
   (hash-remove! (client-guilds (ws-client-client ws-client))
                 (hash-ref data 'id)))
 
+(define (event-channel-create ws-client data)
+  (let ([id (hash-ref data 'id)]
+        [chan (hash->channel data)]
+        [client (ws-client-client ws-client)])
+    (case (hash-ref data 'type)
+      [(1 3) (hash-set! (client-private-channels client) id chan)]
+      [else (let ([guild (get-guild client (hash-ref data 'guild_id))])
+              (hash-set! (guild-channels guild) id chan))])))
+
+(define (event-channel-delete ws-client data)
+  (let ([id (hash-ref data 'id)]
+        [client (ws-client-client ws-client)])
+    (case (hash-ref data 'type)
+      [(1 3) (hash-remove! (client-private-channels client) id)]
+      [else (let ([guild (get-guild client (hash-ref data 'guild_id))])
+              (hash-remove! (guild-channels guild) id))])))
+
 (define (get-channels client)
   (extract-merge guild-channels append (hash-values (client-guilds client))))
 
@@ -69,16 +86,17 @@
             (each funs client old-channel new-channel))]
          [(guild-create guild-delete) (each funs client (hash->guild (ws-client-shard-id ws-client) data))]
          [(guild-update)
-          (let ([old-guild (get-guild (hash-ref data 'id))]
+          (let ([old-guild (get-guild client (hash-ref data 'id))]
                 [new-guild (hash->guild (ws-client-shard-id ws-client) data)])
             (each funs client old-guild new-guild))]
          [(guild-ban-add client-ban-remove)
           (each funs client (hash->user data)
-                (get-guild (hash-ref data 'guild_id)))]
+                (get-guild client (hash-ref data 'guild_id)))]
          [(guild-emojis-update) null] ;; TODO: add this after writing emoji stuff
          [(guild-member-add)
-          (each funs client (hash->member data)
-                (get-guild (hash-ref data 'guild_id)))]
+          (let ([guild (get-guild client (hash-ref data 'guild_id))])
+            (each funs client (hash->member guild data)
+                  guild))]
          [(guild-member-remove) ;; get guild object, get member object from guild object
           (each funs client (get-member client (hash-ref (hash-ref data 'user) 'id) (hash-ref data 'guild_id)))]
          [(guild-member-update)
@@ -88,7 +106,7 @@
          [(message-create) (each funs client (hash->message data))]
          ;;[(message-delete) (each funs client ())] TODO: cache messages
          [(message-reaction-add message-reaction-remove) #t] ;; TODO
-         [(presence-update) #t] ;; TODO
+         [(presence-update) null] ;; TODO
          [(typing-start)
           (let ([channel (get-channel client (hash-ref data 'channel_id))])
             (let ([member (get-member client (hash-ref data 'user_id) (channel-guild-id channel))])
@@ -100,15 +118,19 @@
 (define (event-consumer)
   (thread
    (thunk
-    (let loop ()
-      (with-handlers ([(const #t) (lambda (v)
-                                    (printf "EVENT CONSUMER ERRORED WITH: ~a\n" v)
-                                    (loop))])
-        (match (thread-receive)
-          [(list ws data type)
-           (dispatch-event ws data type)
-           (loop)]
-          ['done null]))))))
+    (let loop ()(match (thread-receive)
+                  [(list ws data type)
+                   (dispatch-event ws data type)
+                   (loop)]
+                  ['done null])))))
+      ;; (with-handlers ([(const #t) (lambda (v)
+      ;;                               (printf "EVENT CONSUMER ERRORED WITH: ~a\n" v)
+      ;;                               (loop))])
+      ;;   (match (thread-receive)
+      ;;     [(list ws data type)
+      ;;      (dispatch-event ws data type)
+      ;;      (loop)]
+      ;;     ['done null]))))))
 
 (define (on-event evt client callback)
   (let ([events (client-events client)])
@@ -119,4 +141,6 @@
 (define (add-events client)
   (on-event 'raw-ready client event-ready)
   (on-event 'raw-guild-create client event-guild-create)
-  (on-event 'raw-guild-delete client event-guild-delete))
+  (on-event 'raw-guild-delete client event-guild-delete)
+  (on-event 'raw-channel-create client event-channel-create)
+  (on-event 'raw-channel-delete client event-channel-delete))

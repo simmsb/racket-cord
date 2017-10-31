@@ -45,8 +45,7 @@
              null ;; heartbeat-thread
              null ;; recv-thread
              #t
-             null
-             0))
+             null))
 
 
 (define (make-heartbeat seq)
@@ -107,10 +106,16 @@
   (connect client))
 
 (define (connect client)
-  (when (> (ws-client-reconnects client) 3)
-    (set-ws-client-reconnects! client 0)
-    (set-ws-client-gateway-url! client (string->url (get-ws-url (client-requester (ws-client-client client))))))
-  (set-ws-client-ws! client (ws-connect (ws-client-gateway-url client)))
+  (define (make-ws-conn)
+    (let retry ([count 0])
+      (if (> count 3)
+          (begin (set-ws-client-gateway-url! client (string->url (get-ws-url (client-requester (ws-client-client client)))))
+                 (displayln "Failed to connect to gateway more than 3 times, getting a new url.")
+                 (sleep 5)
+                 (make-ws-conn))
+          (with-handlers ([exn:fail:network? (thunk (retry (add1 count)))])
+            (ws-connect (ws-client-gateway-url client))))))
+  (set-ws-client-ws! client (make-ws-conn))
   (set-ws-client-seq! client null)
   (set-ws-client-heartbeat-received! client #t)
   (set-ws-client-recv-thread! client (ws-loop client)))

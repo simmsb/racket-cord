@@ -41,8 +41,7 @@
    [heartbeat-thread #:mutable]
    [recv-thread #:mutable]
    [heartbeat-received #:mutable]
-   [seq #:mutable]
-   [reconnects #:mutable]))
+   [seq #:mutable]))
 
 (struct guild
   (shard-id
@@ -148,51 +147,59 @@
   #:mutable
   #:transparent)
 
-(define (extract-and-parse data value parser)
-  (bindmap (lambda (m) (list (hash-ref data 'id) (parser m)))
-           (hash-ref data value null)))
+(define ((get-id parser) data)
+  (cons (hash-ref data 'id) (parser data)))
 
-;; TODO: eventually do these as macros
+(define (extract-and-parse data value parser)
+  (bindmap parser (hash-ref data value null)))
+
 (define (hash->guild shard-id data)
-  (guild
-   shard-id
-   (hash-ref data 'id)
-   (hash-ref data 'name null)
-   (hash-ref data 'icon null)
-   (hash-ref data 'splash null)
-   (hash-ref data 'owner_id null)
-   (hash-ref data 'region null)
-   (hash-ref data 'afk_channel_id null)
-   (hash-ref data 'afk_timeout null)
-   (hash-ref data 'embed_enabled null)
-   (hash-ref data 'embed_channel_id null)
-   (hash-ref data 'verification_level null)
-   (hash-ref data 'default_message_notifications null)
-   (hash-ref data 'explicit_content_filter null)
-   (extract-and-parse data 'roles hash->role)
-   (hash-ref data 'emojis null)
-   (hash-ref data 'features null)
-   (hash-ref data 'mfa_level null)
-   (hash-ref data 'application_id null)
-   (hash-ref data 'widget_enabled null)
-   (hash-ref data 'widget_channel_id null)
-   (hash-ref data 'joined_at null)
-   (hash-ref data 'large null)
-   (hash-ref data 'unavailable null)
-   (hash-ref data 'member_count null)
-   (hash-ref data 'voice_states null)
-   (bindap make-hash (extract-and-parse data 'members hash->member))
-   (bindap make-hash (extract-and-parse data 'channels hash->channel))
-   (hash-ref data 'presences null)))
+  (let ([temp-guild
+         (guild
+          shard-id
+          (hash-ref data 'id)
+          (hash-ref data 'name null)
+          (hash-ref data 'icon null)
+          (hash-ref data 'splash null)
+          (hash-ref data 'owner_id null)
+          (hash-ref data 'region null)
+          (hash-ref data 'afk_channel_id null)
+          (hash-ref data 'afk_timeout null)
+          (hash-ref data 'embed_enabled null)
+          (hash-ref data 'embed_channel_id null)
+          (hash-ref data 'verification_level null)
+          (hash-ref data 'default_message_notifications null)
+          (hash-ref data 'explicit_content_filter null)
+          (bind make-hash (extract-and-parse data 'roles (get-id hash->role)))
+          (hash-ref data 'emojis null)
+          (hash-ref data 'features null)
+          (hash-ref data 'mfa_level null)
+          (hash-ref data 'application_id null)
+          (hash-ref data 'widget_enabled null)
+          (hash-ref data 'widget_channel_id null)
+          (hash-ref data 'joined_at null)
+          (hash-ref data 'large null)
+          (hash-ref data 'unavailable null)
+          (hash-ref data 'member_count null)
+          (hash-ref data 'voice_states null)
+          null
+          (bind make-hash (extract-and-parse data 'channels (get-id hash->channel)))
+          (hash-ref data 'presences null))])
+
+    (set-guild-members! temp-guild
+                        (bind make-hash (extract-and-parse data 'members (lambda (m)
+                                                                             (cons (hash-ref (hash-ref m 'user) 'id)
+                                                                                   (hash->member temp-guild m))))))
+    temp-guild))
 
 (define (hash->channel data)
   (channel
    (hash-ref data 'id)
    (hash-ref data 'type null)
-   (hash-ref data 'guild_id) ;; TODO: parse timestamps
-   (hash-ref data 'position)
+   (hash-ref data 'guild_id null) ;; TODO: parse timestamps
+   (hash-ref data 'position null)
    (hash-ref data 'permission_overwrites null)
-   (hash-ref data 'name)
+   (hash-ref data 'name null)
    (hash-ref data 'topic null)
    (hash-ref data 'nsfw null)
    (hash-ref data 'last_message_id null)
@@ -213,11 +220,11 @@
    (hash-ref data 'bot null)
    (hash-ref data 'mfa_enabled null)))
 
-(define (hash->member data)
+(define (hash->member guild data)
   (member
    (hash->user (hash-ref data 'user))
    (hash-ref data 'nick null)
-   (extract-and-parse data 'roles hash->role)
+   (map (lambda (g) (hash-ref (guild-roles guild) g)) (hash-ref data 'roles))
    (hash-ref data 'joined_at)
    (hash-ref data 'deaf null)
    (hash-ref data 'mute null)))

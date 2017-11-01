@@ -23,6 +23,7 @@
     (add-events clnt)
     clnt))
 
-(define (make-request client endpoint . args) ;; make a request on the http loop
+;; make a request on the http loop eventually this will be used to to ratelimiting
+(define (make-request client endpoint . args)
   (thread-send (client-http-loop client) (list endpoint (current-thread) args))
   (thread-receive))

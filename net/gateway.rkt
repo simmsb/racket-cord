@@ -63,7 +63,7 @@
 (define (accept-hello client data)
   (set-ws-client-heartbeat-thread! client (heartbeater client (/ (hash-ref data 'heartbeat_interval) 1000))))
 
-(define (make-identify token shard presence) ;; TODO: more args
+(define (make-identify token shard presence)
   (jsexpr->string
    (hasheq
     'op op-identifiy
@@ -121,7 +121,8 @@
   (set-ws-client-recv-thread! client (ws-loop client)))
 
 (define (disconnect client)
-  (kill-thread (ws-client-heartbeat-thread client))
+  (unless (null? (ws-client-heartbeat-thread client))
+    (kill-thread (ws-client-heartbeat-thread client)))
   (set-ws-client-heartbeat-thread! client null)
   (ws-close! (ws-client-ws client)))
 
@@ -152,7 +153,7 @@
               [(== op-heartbeat-ack)
                (set-ws-client-heartbeat-received! client #t)]
               [_ (printf "Unhandled opcode: ~a\n" o)])]
-           [(? eof-object?) (println "WS GAVE EOF: RECONNECTING") (trigger-reconnect client)] ;; TODO: detect if we're looping
+           [(? eof-object?) (println "WS GAVE EOF: STOPPING") (exit)]
            [x (printf "Unhandled response: ~a\n" x)])
          (loop))
        (printf "WS LOOP ON SHARD: ~a EXITING" (ws-client-shard-id client))))))

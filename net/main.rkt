@@ -9,7 +9,18 @@
 
 (provide make-client
          start-client
-         stop-client)
+         stop-client
+         on-event
+         (struct-out game)
+         (struct-out client)
+         (struct-out guild)
+         (struct-out guild-channel)
+         (struct-out dm-channel)
+         (struct-out user)
+         (struct-out member)
+         (struct-out message)
+         (struct-out role)
+         (struct-out emoji))
 
 (define (make-client token shard-count)
   (let ([clnt (new-client token)])

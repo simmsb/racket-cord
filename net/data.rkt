@@ -13,6 +13,7 @@
          (struct-out message)
          (struct-out role)
          (struct-out emoji)
+         (struct-out game)
          hash->guild
          hash->channel
          hash->user
@@ -20,7 +21,6 @@
          hash->message
          hash->role
          hash->emoji
-         hash->status
          hash->game
          update-guild
          update-channel
@@ -37,7 +37,8 @@
    requester
    http-loop
    token)
-  #:mutable)
+  #:mutable
+  #:transparent)
 
 (struct ws-client
   ([ws #:mutable]
@@ -125,12 +126,14 @@
    roles
    joined_at
    deaf
-   mute)
+   mute
+   status
+   game)
   #:transparent)
 
 (struct message
   (id
-   channel
+   channel-id
    author
    content
    timestamp
@@ -166,13 +169,6 @@
    managed)
   #:transparent)
 
-(struct status
-  (since
-   game
-   status
-   afk)
-  #:transparent)
-
 (struct game
   (name
    type
@@ -203,7 +199,7 @@
           (hash-ref data 'default_message_notifications null)
           (hash-ref data 'explicit_content_filter null)
           (bind make-hash (extract-and-parse data 'roles (get-id hash->role)))
-          null
+          (extract-and-parse data 'emojis hash->emoji)
           (hash-ref data 'features null)
           (hash-ref data 'mfa_level null)
           (hash-ref data 'application_id null)
@@ -217,12 +213,11 @@
           null
           (bind make-hash (extract-and-parse data 'channels (get-id hash->channel)))
           (hash-ref data 'presences null))])
-
+    ;; TODO: something here borking members
     (set-guild-members! temp-guild
                         (bind make-hash (extract-and-parse data 'members (lambda (m)
                                                                              (cons (hash-ref (hash-ref m 'user) 'id)
                                                                                    (hash->member temp-guild m))))))
-    (set-guild-emojis! temp-guild (extract-and-parse data 'emojis (lambda (m) (hash->member temp-guild m))))
     temp-guild))
 
 (define (hash->channel data)
@@ -267,12 +262,14 @@
    (map (lambda (g) (hash-ref (guild-roles guild) g)) (hash-ref data 'roles))
    (hash-ref data 'joined_at)
    (hash-ref data 'deaf null)
-   (hash-ref data 'mute null)))
+   (hash-ref data 'mute null)
+   null
+   null))
 
-(define (hash->message guild data)
+(define (hash->message data)
   (message
    (hash-ref data 'id)
-   (hash-ref (hash-ref data 'channel_id) (guild-channels guild) null)
+   (hash-ref data 'channel_id)
    (hash->user (hash-ref data 'author))
    (hash-ref data 'content)
    (hash-ref data 'timestamp) ;; TODO: parse timestamps
@@ -298,21 +295,14 @@
    (hash-ref data 'managed)
    (hash-ref data 'mentionable)))
 
-(define (hash->emoji guild data)
+(define (hash->emoji data)
   (emoji
    (hash-ref data 'id)
    (hash-ref data 'name)
-   (map (lambda (g) (hash-ref (guild-roles guild) g)) (hash-ref data 'roles))
+   (hash-ref data 'roles)
    (hash-ref data 'user null)
    (hash-ref data 'require_colons)
    (hash-ref data 'managed)))
-
-(define (hash->status data)
-  (status
-   (hash-ref data 'name)
-   (extract-and-parse data 'game hash->game)
-   (hash-ref data 'status)
-   (hash-ref data 'afk)))
 
 (define (hash->game data)
   (game
@@ -321,7 +311,6 @@
    (hash-ref data 'url)))
 
 (define (update-guild old-guild data)
-  (displayln data)
   (struct-copy guild old-guild
                [name (hash-ref data 'name (guild-name old-guild))]
                [icon (hash-ref data 'icon (guild-icon old-guild))]
@@ -340,30 +329,36 @@
   (case (hash-ref data 'type)
     [(0 2 4)
      (struct-copy guild-channel old-channel
-                  [position (hash-ref data 'position null)]
-                  [permission-overwrites (hash-ref data 'permission_overwrites null)]
-                  [name (hash-ref data 'name null)]
-                  [topic (hash-ref data 'topic null)]
-                  [nsfw (hash-ref data 'nsfw null)]
-                  [last-message-id (hash-ref data 'last_message_id null)]
-                  [bitrate (hash-ref data 'bitrate null)]
-                  [user-limit (hash-ref data 'user_limit null)]
-                  [parent-id (hash-ref data 'parent_id null)])]
+                  [position (hash-ref data 'position (guild-channel-position old-channel))]
+                  [permission-overwrites (hash-ref data 'permission_overwrites (guild-channel-permission-overwrites old-channel))]
+                  [name (hash-ref data 'name (guild-channel-name old-channel))]
+                  [topic (hash-ref data 'topic (guild-channel-topic old-channel))]
+                  [nsfw (hash-ref data 'nsfw (guild-channel-nsfw old-channel))]
+                  [last-message-id (hash-ref data 'last_message_id (guild-channel-last-message-id old-channel))]
+                  [bitrate (hash-ref data 'bitrate (guild-channel-bitrate old-channel))]
+                  [user-limit (hash-ref data 'user_limit (guild-channel-user-limit old-channel))]
+                  [parent-id (hash-ref data 'parent_id (guild-channel-parent-id old-channel))])]
     [(1 3)
      (struct-copy dm-channel old-channel
-                  [name (hash-ref data 'name null)]
-                  [last-message-id (hash-ref data 'last_message_id null)]
-                  [recipients (extract-and-parse data 'recipients hash->user)]
-                  [icon (hash-ref data 'icon null)])]))
+                  [name (hash-ref data 'name (dm-channel-name old-channel))]
+                  [last-message-id (hash-ref data 'last_message_id (dm-channel-last-message-id old-channel))]
+                  [recipients (if (null? (hash-ref data 'recipients null))
+                                  (dm-channel-recipients old-channel)
+                                  (extract-and-parse data 'recipients hash->user))]
+                  [icon (hash-ref data 'icon (dm-channel-icon old-channel))])]))
 
 (define (update-user old-user data)
   (struct-copy user old-user
-               [username (hash-ref data 'username)]
-               [discriminator (hash-ref data 'discriminator)]
-               [avatar (hash-ref data 'avatar)]))
+               [username (hash-ref data 'username (user-username old-user))]
+               [discriminator (hash-ref data 'discriminator (user-discriminator old-user))]
+               [avatar (hash-ref data 'avatar (user-avatar old-user))]))
 
 (define (update-member guild old-member data)
   (struct-copy member old-member
                [user (update-user (member-user old-member) (hash-ref data 'user))]
-               [roles (map (lambda (g) (hash-ref (guild-roles guild) g)) (hash-ref data 'roles))]
-               [nick (hash-ref data 'nick)]))
+               [roles (map (lambda (g) (hash-ref (guild-roles guild) g)) (hash-ref data 'roles null))]
+               [status (hash-ref data 'status (member-status old-member))]
+               [game (if (null? (hash-ref data 'game))  ;; A bit messy
+                         (member-game data)
+                         (hash->game (hash-ref data 'game)))]
+               [nick (hash-ref data 'nick (member-nick old-member))]))

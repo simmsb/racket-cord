@@ -1,14 +1,12 @@
 #lang racket
 
 (require net/rfc6455
-         net/url
          racket/hash
          json
          simple-http
          "http.rkt"
          "data.rkt"
-         "events.rkt"
-         "client.rkt")
+         "events.rkt")
 
 (provide new-ws-client
          connect
@@ -28,17 +26,12 @@
 (define op-hello 10)
 (define op-heartbeat-ack 11)
 
-(define gateway-params "/?v=6&encoding=json")
 
-(define (get-ws-url req)
-  (string-append (dict-ref (json-response-body (get-gateway req)) 'url)
-                 gateway-params))
-
-(define (new-ws-client parent shard-id)
+(define (new-ws-client parent shard-id ws-url)
   (ws-client null ;; ws
              (client-token parent)
              parent ;; client parent
-             (string->url (get-ws-url (client-requester parent))) ;; gateway url
+             ws-url
              shard-id
              #f ;; ready
              null ;; session-id
@@ -101,30 +94,35 @@
                                                (ws-client-session-id client)
                                                (ws-client-seq client))))
 
-(define (trigger-reconnect client)
-  (disconnect client)
+(define (trigger-reconnect client [reason ""])
+  (disconnect client #:reason reason)
   (connect client))
 
 (define (connect client)
   (define (make-ws-conn)
-    (let retry ([count 0])
+    (let retry ([count 0]
+                [backoff 1])
       (if (> count 3)
-          (begin (set-ws-client-gateway-url! client (string->url (get-ws-url (client-requester (ws-client-client client)))))
+          (begin (set-ws-client-gateway-url! client (get-ws-url (client-requester (ws-client-client client))))
                  (displayln "Failed to connect to gateway more than 3 times, getting a new url.")
                  (sleep 5)
                  (make-ws-conn))
-          (with-handlers ([exn:fail:network? (thunk (retry (add1 count)))])
+          (with-handlers ([exn:fail:network? (thunk (begin (sleep backoff)
+                                                           (retry (add1 count)
+                                                                  (* 2 backoff))))])
             (ws-connect (ws-client-gateway-url client))))))
   (set-ws-client-ws! client (make-ws-conn))
   (set-ws-client-seq! client null)
   (set-ws-client-heartbeat-received! client #t)
   (set-ws-client-recv-thread! client (ws-loop client)))
 
-(define (disconnect client)
+(define (disconnect client #:status [status 1000] #:reason [reason ""])
   (unless (null? (ws-client-heartbeat-thread client))
     (kill-thread (ws-client-heartbeat-thread client)))
   (set-ws-client-heartbeat-thread! client null)
-  (ws-close! (ws-client-ws client)))
+  (ws-close! (ws-client-ws client
+                           #:status status
+                           #:reason reason)))
 
 (define (ws-loop client)
   (thread
@@ -136,11 +134,11 @@
             (match o
               [(== op-dispatch)
                (set-ws-client-seq! client s)
-               (thread-send (client-event-consumer (ws-client-client client)) (list client d t))]
+               (dispatch-event client d t)]
               [(== op-heartbeat)
                (send-heartbeat client)]
               [(== op-reconnect)
-               (trigger-reconnect client)
+               (trigger-reconnect client "Recieved reconnect payload.")
                (exit)]
               [(== op-invalid-session)
                (if d
@@ -163,7 +161,7 @@
       (ws-send! (ws-client-ws client) (make-heartbeat (ws-client-seq client)))
       (begin
         (println "WS DID NOT BEAT: RECONNECTING")
-        (trigger-reconnect client)))
+        (trigger-reconnect client "Did not recieve heartbeat ACK.")))
   (set-ws-client-heartbeat-received! client #f))
 
 (define (heartbeater client interval)

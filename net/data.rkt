@@ -32,11 +32,10 @@
    user
    guilds
    private-channels
-   event-consumer
    events
    requester
-   http-loop
-   token)
+   token
+   running)
   #:mutable
   #:transparent)
 
@@ -211,22 +210,21 @@
           (hash-ref data 'member_count null)
           (hash-ref data 'voice_states null)
           null
-          (bind make-hash (extract-and-parse data 'channels (get-id hash->channel)))
+          (bind make-hash (extract-and-parse data 'channels (get-id (lambda (d) (hash->channel d #:guild-id (hash-ref data 'id))))))
           (hash-ref data 'presences null))])
-    ;; TODO: something here borking members
     (set-guild-members! temp-guild
                         (bind make-hash (extract-and-parse data 'members (lambda (m)
-                                                                             (cons (hash-ref (hash-ref m 'user) 'id)
-                                                                                   (hash->member temp-guild m))))))
+                                                                           (cons (hash-ref (hash-ref m 'user) 'id)
+                                                                                 (hash->member temp-guild m))))))
     temp-guild))
 
-(define (hash->channel data)
+(define (hash->channel data #:guild-id [guild-id null])
   (case (hash-ref data 'type)
     [(0 2 4)
      (guild-channel
       (hash-ref data 'id)
       (hash-ref data 'type)
-      (hash-ref data 'guild_id)
+      (hash-ref data 'guild_id guild-id)
       (hash-ref data 'position)
       (hash-ref data 'permission_overwrites)
       (hash-ref data 'name)
@@ -234,6 +232,7 @@
       (hash-ref data 'nsfw null)
       (hash-ref data 'last_message_id null)
       (hash-ref data 'bitrate null)
+      (hash-ref data 'user_limit null)
       (hash-ref data 'parent_id null))]
     [(1 3)
      (dm-channel

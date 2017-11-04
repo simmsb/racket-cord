@@ -104,8 +104,6 @@
     (semaphore-wait global-lock)
     (semaphore-post global-lock)
     (let ([lock (hash-ref! ratelimits route-key (thunk (make-semaphore 1)))])
-      (displayln lock)
-      (displayln ratelimits)
       (call-with-semaphore
        lock
        (thunk
@@ -137,7 +135,6 @@
                 (let ([delta (max 0 (reset . - . date))])
                   (log-discord-info "Sleeping on ratelimit ~a for ~a seconds" route-key delta)
                   (sleep delta)))
-              (println "hello")
               (json-response-body resp)))))))))
 
 (define (get-channel client id)

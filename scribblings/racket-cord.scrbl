@@ -7,4 +7,4 @@
 
 @defmodule[racket-cord]
 
-Package Description Here
+Racket bindings for Discord.

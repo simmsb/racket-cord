@@ -9,8 +9,10 @@
 
 (provide make-client
          start-client
+         start-client-no-wait
          stop-client
          on-event
+         (all-from-out "utils.rkt")
          (all-from-out "http.rkt")
          (struct-out game)
          (struct-out client)
@@ -38,7 +40,7 @@
          [client (new-client fmt-token)])
     (let-values ([(ws-url shards)
                   (if auto-shard
-                      (http:get-ws-url-bot (client-http-client client)) ;; TODO: revisit this
+                      (http:get-ws-url-bot (client-http-client client))
                       (values (http:get-ws-url (client-http-client client))
                               shard-count))])
       (set-client-shards! client (map (lambda (n) (new-ws-client client n ws-url))

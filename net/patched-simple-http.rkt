@@ -88,7 +88,7 @@
     [(regexp #rx"application/xml") 'xml]
     [else 'text]))
 
-(struct exn:fail:network:http:error exn:fail:network (code type headers) #:transparent)
+(struct exn:fail:network:http:error exn:fail:network (code type headers response) #:transparent)
 
 (define (make-http-error-exn code headers response)
   (let* ([type (get-content-type headers)]
@@ -99,7 +99,7 @@
                  [else (port->string response)])])
     (raise
      (exn:fail:network:http:error
-      (~a body) (current-continuation-marks) code type headers))))
+      (~a body) (current-continuation-marks) code type headers body))))
 
 (define (make-uri uri [params '()])
   (format "~a~a" uri (params->string params)))

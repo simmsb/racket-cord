@@ -31,10 +31,10 @@
 (define (dispatch-event ws-client data type)
   (thread
    (thunk
-    (printf "DISPATCHING EVENT: ~a\n" type)
-    (with-handlers ([(const #t)
+    (log-discord-debug "DISPATCHING EVENT: ~a" type)
+    (with-handlers ([(const #f)
                      (lambda (v)
-                       (printf "Event ~a ERRORED with: ~a\n" type v))])
+                       (log-discord-warning "Event ~a ERRORED with: ~a" type v))])
       (let ([client (ws-client-client ws-client)]
             [events (client-events (ws-client-client ws-client))]
             [raw-evt (string->symbol (string-downcase (format "raw-~a" (string-replace type "_" "-"))))]

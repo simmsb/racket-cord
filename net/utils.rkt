@@ -1,12 +1,8 @@
 #lang racket
 
-(provide bind
-         bindap
-         bindmap
-         each
-         extract-merge
-         find-by-predicate
-         find-key)
+(provide (all-defined-out))
+
+(define-logger discord)
 
 (define (bind f x)
   (if (null? x)

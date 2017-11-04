@@ -7,7 +7,8 @@
          (only-in "http.rkt"
                   get-ws-url)
          "data.rkt"
-         "events.rkt")
+         "events.rkt"
+         "utils.rkt")
 
 (provide new-ws-client
          connect
@@ -49,7 +50,6 @@
 
 (define (json-ws-read ws)
   (let ([data (ws-recv ws #:payload-type 'text)])
-    ;;(unless (eof-object? data) (println data))
     (if (string? data)
         (string->jsexpr data)
         eof)))
@@ -83,14 +83,14 @@
         'seq seq))))
 
 (define (send-identify client presence)
-  (displayln "IDENTIFYING")
+  (log-discord-debug "IDENTIFYING")
   (ws-send! (ws-client-ws client) (make-identify (ws-client-token client)
                                                  (list (ws-client-shard-id client)
                                                        (length (client-shards (ws-client-client client))))
                                                  presence)))
 
 (define (send-resume client)
-  (displayln "RESUMING")
+  (log-discord-debug "RESUMING")
   (ws-send! (ws-client-ws client) (make-resume (ws-client-token client)
                                                (ws-client-session-id client)
                                                (ws-client-seq client))))
@@ -105,7 +105,7 @@
                 [backoff 1])
       (if (> count 3)
           (begin (set-ws-client-gateway-url! client (get-ws-url (client-http-client (ws-client-client client)))) ;; This is pretty bad
-                 (displayln "Failed to connect to gateway more than 3 times, getting a new url.")
+                 (log-discord-debug "Failed to connect to gateway more than 3 times, getting a new url.")
                  (sleep 5)
                  (make-ws-conn))
           (with-handlers ([exn:fail:network? (thunk (begin (sleep backoff)
@@ -128,48 +128,52 @@
 (define (ws-loop client)
   (thread
    (thunk
-     (let exit ()
-       (let loop ()
-         (match (json-ws-read (ws-client-ws client))
-           [(hash-table ('op o) ('d d) ('s s) ('t t))
-            (match o
-              [(== op-dispatch)
-               (set-ws-client-seq! client s)
-               (dispatch-event client d t)]
-              [(== op-heartbeat)
-               (send-heartbeat client)]
-              [(== op-reconnect)
-               (trigger-reconnect client "Recieved reconnect payload.")
-               (exit)]
-              [(== op-invalid-session)
-               (if d
-                   (send-resume client)
-                   (begin (sleep (random 1 5))
-                          (send-identify client (hash))))]
-              [(== op-hello)
-               (accept-hello client d)
-               (send-identify client (hash))] ;; TODO: sort out presence passing
-              [(== op-heartbeat-ack)
-               (set-ws-client-heartbeat-received! client #t)]
-              [_ (printf "Unhandled opcode: ~a\n" o)])]
-           [(? eof-object?) (println "WS GAVE EOF: STOPPING") (exit)]
-           [x (printf "Unhandled response: ~a\n" x)])
-         (loop))
-       (printf "WS LOOP ON SHARD: ~a EXITING" (ws-client-shard-id client))))))
+    (let exit ()
+      (let loop ()
+        (let ([data (json-ws-read (ws-client-ws client))])
+          (if (eof-object? data)
+              (begin (log-discord-debug "WS GAVE EOF: Reconnecting")
+                     (trigger-reconnect client "WS Closed."))
+              (let ([o (hash-ref data 'op null)]
+                    [d (hash-ref data 'd null)]
+                    [s (hash-ref data 's null)]
+                    [t (hash-ref data 't null)])
+                (match o
+                  [(== op-dispatch)
+                   (set-ws-client-seq! client s)
+                   (dispatch-event client d t)]
+                  [(== op-heartbeat)
+                   (send-heartbeat client)]
+                  [(== op-reconnect)
+                   (trigger-reconnect client "Recieved reconnect payload.")
+                   (exit)]
+                  [(== op-invalid-session)
+                   (if d
+                       (send-resume client)
+                       (begin (sleep (random 1 5))
+                              (send-identify client (hash))))]
+                  [(== op-hello)
+                   (accept-hello client d)
+                   (send-identify client (hash))] ;; TODO: sort out presence passing
+                  [(== op-heartbeat-ack)
+                   (set-ws-client-heartbeat-received! client #t)]
+                  [_ (log-discord-debug "Unhandled opcode: ~a\n" o)]))))
+        (loop))
+      (log-discord-debug "WS LOOP ON SHARD: ~a EXITING" (ws-client-shard-id client))))))
 
 (define (send-heartbeat client)
   (if (ws-client-heartbeat-received client)
       (ws-send! (ws-client-ws client) (make-heartbeat (ws-client-seq client)))
       (begin
-        (println "WS DID NOT BEAT: RECONNECTING")
+        (log-discord-debug "WS DID NOT BEAT: RECONNECTING")
         (trigger-reconnect client "Did not recieve heartbeat ACK.")))
   (set-ws-client-heartbeat-received! client #f))
 
 (define (heartbeater client interval)
-  (printf "Starting to heartbeat at a period of ~as" interval)
+  (log-discord-debug "Starting to heartbeat at a period of ~as" interval)
   (thread
    (thunk
-     (let loop ()
-       (send-heartbeat client)
-       (sleep interval)
-       (loop)))))
+    (let loop ()
+      (send-heartbeat client)
+      (sleep interval)
+      (loop)))))

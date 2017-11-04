@@ -4,7 +4,8 @@
          racket/hash
          json
          simple-http
-         "http.rkt"
+         (only-in "http.rkt"
+                  get-ws-url)
          "data.rkt"
          "events.rkt")
 
@@ -103,7 +104,7 @@
     (let retry ([count 0]
                 [backoff 1])
       (if (> count 3)
-          (begin (set-ws-client-gateway-url! client (get-ws-url (client-requester (ws-client-client client))))
+          (begin (set-ws-client-gateway-url! client (get-ws-url (client-http-client (ws-client-client client)))) ;; This is pretty bad
                  (displayln "Failed to connect to gateway more than 3 times, getting a new url.")
                  (sleep 5)
                  (make-ws-conn))

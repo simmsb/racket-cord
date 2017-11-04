@@ -4,13 +4,14 @@
          "data.rkt"
          "events.rkt"
          "gateway.rkt"
-         "http.rkt"
+         (prefix-in http: "http.rkt")
          "utils.rkt")
 
 (provide make-client
          start-client
          stop-client
          on-event
+         (all-from-out "http.rkt")
          (struct-out game)
          (struct-out client)
          (struct-out guild)
@@ -33,16 +34,16 @@
                      #:token-type [token-type 'bot]
                      #:auto-shard [auto-shard #f]
                      #:shard-count [shard-count 1])
-  (let ([fmt-token (format-token token token-type)])
-    (let ([client (new-client fmt-token)])
-      (let-values ([(ws-url shards)
-                    (if auto-shard
-                        (get-ws-url-bot (client-requester client))
-                        (values (get-ws-url (client-requester client))
-                                shard-count))])
-        (set-client-shards! client (map (lambda (n) (new-ws-client client n ws-url))
-                                        (range shards))))
-      client)))
+  (let* ([fmt-token (format-token token token-type)]
+         [client (new-client fmt-token)])
+    (let-values ([(ws-url shards)
+                  (if auto-shard
+                      (http:get-ws-url-bot (client-http-client client)) ;; TODO: revisit this
+                      (values (http:get-ws-url (client-http-client client))
+                              shard-count))])
+      (set-client-shards! client (map (lambda (n) (new-ws-client client n ws-url))
+                                      (range shards))))
+    client))
 
 (define (new-client token)
   (let ([clnt
@@ -52,23 +53,17 @@
           (make-hash)
           (make-hash)
           (make-hash)
-          (make-discord-http token)
-          (http-request-loop)
+          (http:make-http-client token)
           token
-          (make-semaphore 1))])
+          (make-semaphore 0))])
     (add-events clnt)
     clnt))
 
-;; make a request on the http loop eventually this will be used to to ratelimiting
-(define (make-request client endpoint . args)
-  (thread-send (client-http-loop client) (list endpoint (current-thread) args))
-  (thread-receive))
-
-
 (define (start-client client)
-  (semaphore-wait (client-running client))
   (for ([shard (client-shards client)])
-    (connect shard)))
+    (connect shard))
+  (semaphore-wait (client-running client)))
+
 
 (define (start-client-no-wait client)
   (for ([shard (client-shards client)])

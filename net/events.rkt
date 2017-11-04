@@ -11,6 +11,7 @@
          on-event
          dispatch-event)
 
+;; TODO: Client needs to be made an object and these made methods of it
 (define (get-channels client)
   (extract-merge guild-channels append (hash-values (client-guilds client))))
 

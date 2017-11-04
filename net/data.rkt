@@ -33,7 +33,7 @@
    guilds
    private-channels
    events
-   requester
+   http-client
    token
    running)
   #:mutable

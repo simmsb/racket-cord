@@ -14,6 +14,7 @@
          (struct-out role)
          (struct-out emoji)
          (struct-out game)
+         (struct-out invite)
          hash->guild
          hash->channel
          hash->user
@@ -22,6 +23,7 @@
          hash->role
          hash->emoji
          hash->game
+         hash->invite
          update-guild
          update-channel
          update-user
@@ -174,6 +176,12 @@
    url)
   #:transparent)
 
+(struct invite
+  (code
+   guild
+   channel)
+  #:transparent)
+
 (define ((get-id parser) data)
   (cons (hash-ref data 'id) (parser data)))
 
@@ -308,6 +316,12 @@
    (hash-ref data 'name)
    (hash-ref data 'type)
    (hash-ref data 'url)))
+
+(define (hash->invite data)
+  (invite
+   (hash-ref data 'code)
+   (hash-ref data 'guild)
+   (hash-ref data 'channel)))
 
 (define (update-guild old-guild data)
   (struct-copy guild old-guild

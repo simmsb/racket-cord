@@ -23,7 +23,20 @@
          get-ws-url
          get-ws-url-bot
          get-channel
-         create-message)
+         create-message
+         create-reaction
+         delete-own-reaction
+         delete-user-reaction
+         get-reactions
+         delete-all-reactions
+         edit-message
+         delete-message
+         bulk-delete-messages
+         edit-channel-permissions
+         get-channel-invites
+         create-channel-invite
+         delete-channel-permission
+         trigger-typing-indicator)
 
 
 (struct exn:fail:network:http:discord exn:fail (code json-code message) #:transparent)
@@ -62,7 +75,7 @@
    guild-id)
   #:transparent)
 
-(define (make-route method path-parts #:channel-id [channel-id null] #:guild-id [guild-id null])
+(define (make-route method #:channel-id [channel-id null] #:guild-id [guild-id null] . path-parts)
   (route
    method
    (apply discord-url path-parts)
@@ -138,7 +151,7 @@
               (json-response-body resp)))))))))
 
 (define (get-channel client id)
-  (run-route (make-route put '("channels" "{channel-id}") #:channel-id id) (client-http-client client)))
+  (run-route (make-route put "channels" "{channel-id}" #:channel-id id) (client-http-client client)))
 
 (define (create-message client channel-id content #:embed [embed null] #:tts [tts #f])
   (let ([data (make-hash)])
@@ -146,5 +159,80 @@
       (hash-set! data 'embed embed))
     (hash-set! data 'tts tts)
     (hash-set! data 'content content)
-    (hash->message (run-route (make-route post '("channels" "{channel-id}" "messages") #:channel-id channel-id)
+    (hash->message (run-route (make-route post "channels" "{channel-id}" "messages" #:channel-id channel-id)
                              (client-http-client client) #:data (jsexpr->string data)))))
+
+(define (create-reaction client channel-id message-id emoji)
+  (run-route (make-route post "channels" "{channel-id}" "messages" "{message-id}" "reactions" "{emoji}" "@me"
+                         #:channel-id channel-id)
+             (client-http-client client) `((message-id . ,message-id) (emoji . ,emoji))))
+
+(define (delete-own-reaction client channel-id message-id emoji)
+  (run-route (make-route delete "channels" "{channel-id}" "messages" "{message-id}" "reactions" "{emoji}" "@me"
+                         #:channel-id channel-id)
+             (client-http-client client) `((message-id . ,message-id) (emoji . ,emoji))))
+
+(define (delete-user-reaction client channel-id message-id emoji user-id)
+  (run-route (make-route delete "channels" "{channel-id}" "messages" "{message-id}" "reactions" "{emoji}" "{user-id}"
+                         #:channel-id channel-id)
+             (client-http-client client) `((message-id . ,message-id) (emoji . ,emoji) (user-id . ,user-id))))
+
+(define (get-reactions client channel-id message-id emoji)
+  (run-route (make-route get "channels" "{channel-id}" "messages" "{message-id}" "reactions" "{emoji}"
+                         #:channel-id channel-id)
+             (client-http-client client) `((message-id . ,message-id) (emoji . ,emoji))))
+
+(define (delete-all-reactions client channel-id message-id)
+  (run-route (make-route delete "channels" "{channel-id}" "messages" "{message-id}"
+                         #:channel-id channel-id)
+             (client-http-client client) `((message-id . ,message-id))))
+
+(define (edit-message client channel-id message-id)
+  (run-route (make-route patch "channels" "{channel-id}" "messages" "{message-id}"
+                         #:channel-id channel-id)
+             (client-http-client client) `((message-id . ,message-id))))
+
+(define (delete-message client channel-id message-id)
+  (run-route (make-route delete "channels" "{channel-id}" "messages" "{message-id}"
+                         #:channel-id channel-id)
+             (client-http-client client) `((message-id . ,message-id))))
+
+(define (bulk-delete-messages client channel-id . ids)
+  (run-route (make-route post "channels" "{channel-id}" "messages" "bulk-delete"
+                         #:channel-id channel-id)
+             (client-http-client client) #:data (jsexpr->string (hash 'messages ids))))
+
+(define (edit-channel-permissions client channel-id overwrite-id allow deny type)
+  (run-route (make-route put "channels" "{channel-id}" "permissions" "{overwrite-id}"
+                         #:channel-id channel-id)
+             (client-http-client client) `((overwrite-id . ,overwrite-id))
+             #:data (jsexpr->string
+                     (hash 'allow allow
+                           'deny deny
+                           'type type))))
+
+
+(define (get-channel-invites client channel-id)
+  (run-route (make-route get "channels" "{channel-id}" "invites"
+                         #:channel-id channel-id)
+             (client-http-client client)))
+
+(define (create-channel-invite client channel-id [age 86400] [uses 0] [temporary #f] [unique #f])
+  (hash->invite
+   (run-route (make-route post "channels" "{channel-id}" "invites"
+                          #:channel-id channel-id)
+              (client-http-client client) #:data (jsexpr->string
+                                                  (hash 'max_age age
+                                                        'max_uses uses
+                                                        'temporary temporary
+                                                        'unique unique)))))
+
+(define (delete-channel-permission client channel-id overwrite-id)
+  (run-route (make-route delete "channels" "{channel-id}" "permissions" "{overwrite-id}"
+                         #:channel-id channel-id)
+             (client-http-client client) `((overwrite-id . ,overwrite-id))))
+
+(define (trigger-typing-indicator client channel-id)
+  (run-route (make-route post "channels" "{channel-id}" "typing"
+                         #:channel-id channel-id)
+             (client-http-client client)))

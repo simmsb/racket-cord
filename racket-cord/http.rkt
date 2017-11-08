@@ -15,32 +15,18 @@
          "patched-simple-http.rkt"
          "utils.rkt")
 
-(provide make-discord-http
-         (struct-out exn:fail:network:http:discord)
-         (struct-out http-client)
-         make-http-client
-         discord-url
-         get-ws-url
-         get-ws-url-bot
-         get-channel
-         create-message
-         create-reaction
-         delete-own-reaction
-         delete-user-reaction
-         get-reactions
-         delete-all-reactions
-         edit-message
-         delete-message
-         bulk-delete-messages
-         edit-channel-permissions
-         get-channel-invites
-         create-channel-invite
-         delete-channel-permission
-         trigger-typing-indicator)
-
+(provide (except-out (all-defined-out)
+                     make-multipart
+                     format-route
+                     (struct-out route)
+                     make-route
+                     apply-route
+                     gateway-params
+                     discord-url
+                     rfc2822->unix-seconds
+                     run-route))
 
 (struct exn:fail:network:http:discord exn:fail (code json-code message) #:transparent)
-
 
 (define (make-discord-http token)
   (update-headers
@@ -150,8 +136,18 @@
                   (sleep delta)))
               (json-response-body resp)))))))))
 
-(define (get-channel client id)
-  (run-route (make-route put "channels" "{channel-id}" #:channel-id id) (client-http-client client)))
+
+;; CHANNEL ENDPOINTS
+
+(define (get-channel client channel-id)
+  (hash->channel (run-route (make-route put "channels" "{channel-id}"
+                                       #:channel-id channel-id)
+                           (client-http-client client))))
+
+(define (modify-channel client channel-id data)
+  (hash->channel (run-route (make-route patch "channels" "{channel-id}"
+                                       #:channel-id channel-id)
+                           (client-http-client client) #:data (jsexpr->string data))))
 
 (define (create-message client channel-id content #:embed [embed null] #:tts [tts #f])
   (let ([data (make-hash)])
@@ -178,9 +174,10 @@
              (client-http-client client) `((message-id . ,message-id) (emoji . ,emoji) (user-id . ,user-id))))
 
 (define (get-reactions client channel-id message-id emoji)
-  (run-route (make-route get "channels" "{channel-id}" "messages" "{message-id}" "reactions" "{emoji}"
-                         #:channel-id channel-id)
-             (client-http-client client) `((message-id . ,message-id) (emoji . ,emoji))))
+  (map hash->user
+       (run-route (make-route get "channels" "{channel-id}" "messages" "{message-id}" "reactions" "{emoji}"
+                              #:channel-id channel-id)
+                  (client-http-client client) `((message-id . ,message-id) (emoji . ,emoji)))))
 
 (define (delete-all-reactions client channel-id message-id)
   (run-route (make-route delete "channels" "{channel-id}" "messages" "{message-id}"
@@ -188,9 +185,9 @@
              (client-http-client client) `((message-id . ,message-id))))
 
 (define (edit-message client channel-id message-id)
-  (run-route (make-route patch "channels" "{channel-id}" "messages" "{message-id}"
-                         #:channel-id channel-id)
-             (client-http-client client) `((message-id . ,message-id))))
+  (hash->message (run-route (make-route patch "channels" "{channel-id}" "messages" "{message-id}"
+                                       #:channel-id channel-id)
+                           (client-http-client client) `((message-id . ,message-id)))))
 
 (define (delete-message client channel-id message-id)
   (run-route (make-route delete "channels" "{channel-id}" "messages" "{message-id}"
@@ -210,7 +207,6 @@
                      (hash 'allow allow
                            'deny deny
                            'type type))))
-
 
 (define (get-channel-invites client channel-id)
   (run-route (make-route get "channels" "{channel-id}" "invites"
@@ -236,3 +232,95 @@
   (run-route (make-route post "channels" "{channel-id}" "typing"
                          #:channel-id channel-id)
              (client-http-client client)))
+
+(define (get-pinned-messages client channel-id)
+  (map hash->message (run-route (make-route get "channels" "{channel-id}" "pins"
+                                           #:channel-id channel-id)
+                               (client-http-client client))))
+
+(define (add-pinned-channel-message client channel-id message-id)
+  (run-route (make-route put "channels" "{channel-id}" "pins" "{message-id}"
+                         #:channel-id channel-id)
+             (client-http-client client) `((message-id . ,message-id))))
+
+(define (delete-pinned-channel-message client channel-id message-id)
+  (run-route (make-route delete "channels" "{channel-id}" "pins" "{message-id}"
+                         #:channel-id channel-id)
+             (client-http-client client) `((message-id . ,message-id))))
+
+(define (group-dm-add-recipient client channel-id user-id access-token nick)
+  (run-route (make-route put "channels" "{channel-id}" "recipients" "{user-id}"
+                         #:channel-id channel-id)
+             (client-http-client client) `((user-id . ,user-id))
+             #:data (jsexpr->string (hash 'access_token access-token
+                                          'nick nick))))
+
+(define (group-dm-remove-recipient client channel-id user-id)
+  (run-route (make-route delete "channels" "{channel-id}" "recipients" "{user-id}"
+                         #:channel-id channel-id)
+             (client-http-client client) `((channel-id . ,channel-id))))
+
+
+;; EMOJI ENDPOINTS
+
+(define (list-guild-emoji client guild-id)
+  (map hash->emoji
+       (run-route (make-route get "guilds" "{guild-id}" "emojis"
+                              #:guild-id guild-id)
+                  (client-http-client client))))
+
+(define (get-guild-emoji client guild-id emoji-id)
+  (hash->emoji
+       (run-route (make-route get "guilds" "{guild-id}" "emojis" "{emoji-id}"
+                              #:guild-id guild-id)
+                  (client-http-client client) `((emoji-id . ,emoji-id)))))
+
+
+(define (create-guild-emoji client guild-id name image roles)
+  (hash->emoji
+   (run-route (make-route post "guilds" "{guild-id}" "emojis"
+                          #:guild-id guild-id)
+              (client-http-client client) #:data (jsexpr->string
+                                                  (hash 'name name
+                                                        'image image
+                                                        'roles roles)))))
+
+(define (modify-guild-emoji client guild-id emoji-id name roles)
+  (hash->emoji
+   (run-route (make-route patch "guilds" "{guild-id}" "emojis" "{emoji-id}"
+                          #:guild-id guild-id)
+              (client-http-client client) `((emoji-id . ,emoji-id))
+              #:data (jsexpr->string
+                      (hash 'name name
+                            'roles roles)))))
+
+(define (delete-guild-emoji client guild-id emoji-id)
+  (run-route (make-route delete "guilds" "{guild-id}" "emojis" "{emoji-id}"
+                         #:guild-id guild-id)
+             (client-http-client client) `((emoji-id . ,emoji-id))))
+
+
+;; GUILD ENDPOINTS
+
+(define (get-guild client guild-id)
+  (hash->guild
+   (run-route (make-route get "guilds" "{guild-id}"
+                          #:guild-id guild-id)
+              (client-http-client client))))
+
+(define (modify-guild client guild-id data)
+  (hash->guild
+   (run-route (make-route patch "guilds" "{guild-id}"
+                          #:guild-id guild-id)
+              (client-http-client client) #:data (jsexpr->hash data))))
+
+(define (delete-guild client guild-id)
+   (run-route (make-route delete "guilds" "{guild-id}"
+                          #:guild-id guild-id)
+              (client-http-client client)))
+
+(define (get-guild-channels client guild-id)
+  (map (lambda (data) (hash->channel data #:guild-id guild-id))
+       (run-route (make-route get "guilds" "{guild-id}" "channels"
+                              #:guild-id guild-id)
+                  (client-http-client client))))

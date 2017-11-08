@@ -306,7 +306,7 @@
   (emoji
    (hash-ref data 'id)
    (hash-ref data 'name)
-   (hash-ref data 'roles)
+   (extract-and-parse data 'roles hash->role)
    (hash-ref data 'user null)
    (hash-ref data 'require_colons)
    (hash-ref data 'managed)))

@@ -189,42 +189,36 @@
   (bindmap parser (hash-ref data value null)))
 
 (define (hash->guild shard-id data)
-  (let ([temp-guild
-         (guild
-          shard-id
-          (hash-ref data 'id)
-          (hash-ref data 'name null)
-          (hash-ref data 'icon null)
-          (hash-ref data 'splash null)
-          (hash-ref data 'owner_id null)
-          (hash-ref data 'region null)
-          (hash-ref data 'afk_channel_id null)
-          (hash-ref data 'afk_timeout null)
-          (hash-ref data 'embed_enabled null)
-          (hash-ref data 'embed_channel_id null)
-          (hash-ref data 'verification_level null)
-          (hash-ref data 'default_message_notifications null)
-          (hash-ref data 'explicit_content_filter null)
-          (bind make-hash (extract-and-parse data 'roles (get-id hash->role)))
-          (extract-and-parse data 'emojis hash->emoji)
-          (hash-ref data 'features null)
-          (hash-ref data 'mfa_level null)
-          (hash-ref data 'application_id null)
-          (hash-ref data 'widget_enabled null)
-          (hash-ref data 'widget_channel_id null)
-          (hash-ref data 'joined_at null)
-          (hash-ref data 'large null)
-          (hash-ref data 'unavailable null)
-          (hash-ref data 'member_count null)
-          (hash-ref data 'voice_states null)
-          null
-          (bind make-hash (extract-and-parse data 'channels (get-id (lambda (d) (hash->channel d #:guild-id (hash-ref data 'id))))))
-          (hash-ref data 'presences null))])
-    (set-guild-members! temp-guild
-                        (bind make-hash (extract-and-parse data 'members (lambda (m)
-                                                                           (cons (hash-ref (hash-ref m 'user) 'id)
-                                                                                 (hash->member temp-guild m))))))
-    temp-guild))
+  (guild
+   shard-id
+   (hash-ref data 'id)
+   (hash-ref data 'name null)
+   (hash-ref data 'icon null)
+   (hash-ref data 'splash null)
+   (hash-ref data 'owner_id null)
+   (hash-ref data 'region null)
+   (hash-ref data 'afk_channel_id null)
+   (hash-ref data 'afk_timeout null)
+   (hash-ref data 'embed_enabled null)
+   (hash-ref data 'embed_channel_id null)
+   (hash-ref data 'verification_level null)
+   (hash-ref data 'default_message_notifications null)
+   (hash-ref data 'explicit_content_filter null)
+   (bind make-hash (extract-and-parse data 'roles (get-id hash->role)))
+   (extract-and-parse data 'emojis hash->emoji)
+   (hash-ref data 'features null)
+   (hash-ref data 'mfa_level null)
+   (hash-ref data 'application_id null)
+   (hash-ref data 'widget_enabled null)
+   (hash-ref data 'widget_channel_id null)
+   (hash-ref data 'joined_at null)
+   (hash-ref data 'large null)
+   (hash-ref data 'unavailable null)
+   (hash-ref data 'member_count null)
+   (hash-ref data 'voice_states null)
+   (extract-and-parse data 'members hash->member)
+   (bind make-hash (extract-and-parse data 'channels (get-id (lambda (d) (hash->channel d #:guild-id (hash-ref data 'id))))))
+   (hash-ref data 'presences null)))
 
 (define (hash->channel data #:guild-id [guild-id null])
   (case (hash-ref data 'type)
@@ -262,11 +256,11 @@
    (hash-ref data 'bot null)
    (hash-ref data 'mfa_enabled null)))
 
-(define (hash->member guild data)
+(define (hash->member data)
   (member
    (hash->user (hash-ref data 'user))
    (hash-ref data 'nick null)
-   (map (lambda (g) (hash-ref (guild-roles guild) g)) (hash-ref data 'roles))
+   (hash-ref data 'roles)
    (hash-ref data 'joined_at)
    (hash-ref data 'deaf null)
    (hash-ref data 'mute null)
@@ -366,10 +360,10 @@
                [discriminator (hash-ref data 'discriminator (user-discriminator old-user))]
                [avatar (hash-ref data 'avatar (user-avatar old-user))]))
 
-(define (update-member guild old-member data)
+(define (update-member old-member data)
   (struct-copy member old-member
                [user (update-user (member-user old-member) (hash-ref data 'user))]
-               [roles (map (lambda (g) (hash-ref (guild-roles guild) g)) (hash-ref data 'roles null))]
+               [roles (hash-ref data 'roles null)]
                [status (hash-ref data 'status (member-status old-member))]
                [game (if (null? (hash-ref data 'game))  ;; A bit messy
                          (member-game data)

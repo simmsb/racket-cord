@@ -312,7 +312,7 @@
   (hash->guild
    (run-route (make-route patch "guilds" "{guild-id}"
                           #:guild-id guild-id)
-              (client-http-client client) #:data (jsexpr->hash data))))
+              (client-http-client client) #:data (jsexpr->string data))))
 
 (define (delete-guild client guild-id)
    (run-route (make-route delete "guilds" "{guild-id}"
@@ -324,3 +324,66 @@
        (run-route (make-route get "guilds" "{guild-id}" "channels"
                               #:guild-id guild-id)
                   (client-http-client client))))
+
+(define (create-guild-channel client guild-id data)
+  (hash->channel (run-route
+                 (make-route post "guilds" "{guild-id}" "channnels"
+                             #:guild-id guild-id)
+                 (client-http-client client) #:data (jsexpr->string data))))
+
+(define (modify-guild-channel-permissions client guild-id data)
+  (run-route (make-route patch "guilds" "{guild-id}" "channels"
+                         #:guild-id guild-id)
+             (client-http-client client) #:data (jsexpr->string data)))
+
+(define (get-guild-member client guild-id user-id)
+  (hash->member (run-route
+                (make-route get "guilds" "{guild-id}" "members" "{user-id}"
+                            #:guild-id guild-id)
+                (client-http-client client) `((user-id . ,user-id)))))
+
+(define (list-guild-member client guild-id #:limit [limit 1] #:after [after 0])
+  (map hash->member (run-route
+                    (make-route get "guilds" "{guild-id}" "members"
+                                #:guild-id guild-id)
+                    (client-http-client client) #:data (jsexpr->string
+                                                        (hash 'limit limit
+                                                              'afer after)))))
+
+(define (add-guild-member client guild-id user-id data)
+  (hash->member (run-route
+                (make-route put "guilds" "{guild-id}" "members" "{user-id}"
+                            #:guild-id guild-id)
+                (client-http-client client) `((user-id . ,user-id))
+                #:data (jsexpr->string data))))
+
+(define (modify-guild-member client guild-id user-id data)
+  (run-route (make-route patch "guilds" "{guild-id}" "members" "{guild-id}"
+                         #:guild-id guild-id)
+             (client-http-client client) `((user-id . ,user-id))
+             #:data (jsexpr->string data)))
+
+(define (modify-user-nick client guild-id nick)
+  (run-route (make-route patch "guilds" "{guild-id}" "members" "@me" "nick"
+                         #:guild-id guild-id)
+             (client-http-client client) #:data (jsexpr->string (hash 'nick nick))))
+
+(define (add-guild-member-role client guild-id user-id role-id)
+  (run-route (make-route put "guilds" "{guild-id}" "members" "{user-id}" "roles" "{role-id}"
+                         #:guild-id guild-id)
+             (client-http-client client) `((user-id . ,user-id) (role-id . ,role-id))))
+
+(define (remove-guild-member-role client guild-id user-id role-id)
+  (run-route (make-route delete "guilds" "{guild-id}" "members" "{user-id}" "roles" "{role-id}"
+                         #:guild-id guild-id)
+             (client-http-client client) `((user-id . ,user-id) (role-id . ,role-id))))
+
+(define (add-guild-member client guild-id user-id)
+  (run-route (make-route put "guilds" "{guild-id}" "members" "{user-id}"
+                         #:guild-id guild-id)
+             (client-http-client client) `((user-id . ,user-id))))
+
+(define (get-guild-bans client guild-id)
+  (run-route (make-route get "guilds" "{guild-id}" "bans"
+                         #:guild-id guild-id)
+             (client-http-client client)))

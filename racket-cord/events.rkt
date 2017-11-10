@@ -62,15 +62,14 @@
                 (each funs client guild (map hash->emoji (hash-ref data 'emojis))))]
              [(guild-member-add)
               (let ([guild (get-guild client (hash-ref data 'guild_id))])
-                (each funs client (hash->member guild data)
+                (each funs client (hash->member data)
                       guild))]
              [(guild-member-remove) ;; get guild object, get member object from guild object
               (each funs client (get-member client (member-hash-id data) (hash-ref data 'guild_id)))]
              [(guild-member-update presence-update)
-              (let ([guild (get-guild client (hash-ref data 'guild_id))]
-                    [old-member (get-member client (member-hash-id data) (hash-ref data 'guild_id))])
+              (let ([old-member (get-member client (member-hash-id data) (hash-ref data 'guild_id))])
                 (each funs client old-member
-                      (update-member guild old-member data)))]
+                      (update-member old-member data)))]
              [(message-create) (each funs client (hash->message data))]
              [(message-delete) (each funs client (hash-ref data 'id))] ;; MAYBE: cache messages
              [(message-reaction-add message-reaction-remove)
@@ -167,7 +166,7 @@
 (define (event-guild-member-add ws-client client data)
   (let ([guild (get-guild client (hash-ref data 'guild_id))])
     (hash-set! (guild-members guild) (member-hash-id data)
-               (hash->member guild data))))
+               (hash->member data))))
 
 (define (event-guild-member-remove ws-client client data)
   (let ([guild (get-guild client (hash-ref data 'guild_id))])
@@ -177,13 +176,13 @@
   (let ([guild (get-guild client (hash-ref data 'guild_id))]
         [id (member-hash-id data)])
     (hash-set! (guild-members guild) id
-               (update-member guild (hash-ref (guild-members guild) id) data))))
+               (update-member (hash-ref (guild-members guild) id) data))))
 
 (define (event-guild-members-chunk ws-client client data)
   (let ([guild (get-guild client (hash-ref data 'guild_id))])
     (for ([i (hash-ref data 'members)])
       (hash-set! (guild-members guild) (member-hash-id i)
-                 (hash->member guild i)))))
+                 (hash->member i)))))
 
 (define (event-guild-role-create ws-client client data)
   (let ([guild (get-guild client (hash-ref data 'guild_id))]

@@ -241,7 +241,7 @@
       (hash-ref data 'guild_id guild-id)
       (hash-ref data 'position)
       (hash-ref data 'permission_overwrites)
-      (hash-ref data 'name)
+      (hash-ref data 'name null)
       (hash-ref data 'topic null)
       (hash-ref data 'nsfw null)
       (hash-ref data 'last_message_id null)

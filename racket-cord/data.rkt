@@ -15,6 +15,7 @@
          (struct-out emoji)
          (struct-out game)
          (struct-out invite)
+         (struct-out webhook)
          hash->guild
          hash->channel
          hash->user
@@ -24,6 +25,7 @@
          hash->emoji
          hash->game
          hash->invite
+         hash->webhook
          update-guild
          update-channel
          update-user
@@ -182,6 +184,16 @@
    channel)
   #:transparent)
 
+(struct webhook
+  (id
+   guild-id
+   channel-id
+   user
+   name
+   avatar
+   token)
+  #:transparent)
+
 (define ((get-id parser) data)
   (cons (hash-ref data 'id) (parser data)))
 
@@ -316,6 +328,16 @@
    (hash-ref data 'code)
    (hash-ref data 'guild)
    (hash-ref data 'channel)))
+
+(define (hash->webhook data)
+  (webhook
+   (hash-ref data 'id)
+   (hash-ref data 'guild_id null)
+   (hash-ref data 'channel_id)
+   (bind hash->user (hash-ref data 'user null))
+   (hash-ref data 'name)
+   (hash-ref data 'avatar)
+   (hash-ref data 'token)))
 
 (define (update-guild old-guild data)
   (struct-copy guild old-guild

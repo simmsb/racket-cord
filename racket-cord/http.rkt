@@ -50,23 +50,27 @@
    (make-semaphore 1)
    (make-hash)))
 
-(define (format-route method path channel-id guild-id)
-  (format "~a|~a|~a|~a" method path channel-id guild-id))
+(define (format-route method path channel-id guild-id webhook-id)
+  (format "~a|~a|~a|~a|~a" method path channel-id guild-id webhook-id))
 
 (struct route
   (method
    path
    bucket-key
    channel-id
-   guild-id)
+   guild-id
+   webhook-id)
   #:transparent)
 
-(define (make-route method #:channel-id [channel-id null] #:guild-id [guild-id null] . path-parts)
+(define (make-route method
+                    #:channel-id [channel-id null]
+                    #:guild-id [guild-id null]
+                    #:webhook-id [webhook-id null] . path-parts)
   (route
    method
    (apply discord-url path-parts)
-   (format-route method (string-join path-parts) channel-id guild-id)
-   channel-id guild-id))
+   (format-route method (string-join path-parts) channel-id guild-id webhook-id)
+   channel-id guild-id webhook-id))
 
 (define (apply-route http-client route args data params)
   (let ([method (route-method route)]
@@ -74,9 +78,13 @@
                             (string-replace s (format "{~a}" (car k)) (~a (cdr k))))
                           (route-path route)
                           (append (list (cons "channel-id" (route-channel-id route))
-                                        (cons "guild-id" (route-guild-id route)))
+                                        (cons "guild-id" (route-guild-id route))
+                                        (cons "webhook-id" (route-webhook-id route)))
                                   args))])
-    (method (http-client-requester http-client) formatted #:params params #:data data)))
+    (log-discord-debug "applying route: ~a. Params: ~a. Data: ~a" formatted params data)
+    (method (http-client-requester http-client) formatted
+            #:params (map (lambda (i) (cons (car i) (~a (cdr i)))) params) ; stringify param data
+            #:data data)))
 
 (define gateway-params "/?v=6&encoding=json")
 
@@ -149,6 +157,23 @@
                                        #:channel-id channel-id)
                            (client-http-client client) #:data (jsexpr->string data))))
 
+(define (delete-channel client channel-id)
+  (hash->channel (run-route (make-route delete "channels" "{channel-id}"
+                                       #:channel-id channel-id)
+                           (client-http-client client))))
+
+(define (get-channel-messages client channel-id . params)
+  (map hash->message
+       (run-route (make-route get "channels" "{channel-id}" "messages"
+                              #:channel-id channel-id)
+                  (client-http-client client) #:params params)))
+
+(define (get-channel-message client channel-id message-id)
+  (hash->message (run-route
+                 (make-route get "channels" "{channel-id}" "messages" "{message-id}"
+                             #:channel-id channel-id)
+                 (client-http-client client) `((message-id . ,message-id)))))
+
 (define (create-message client channel-id content #:embed [embed null] #:tts [tts #f])
   (let ([data (make-hash)])
     (unless (null? embed)
@@ -173,11 +198,12 @@
                          #:channel-id channel-id)
              (client-http-client client) `((message-id . ,message-id) (emoji . ,emoji) (user-id . ,user-id))))
 
-(define (get-reactions client channel-id message-id emoji)
+(define (get-reactions client channel-id message-id emoji . params)
   (map hash->user
        (run-route (make-route get "channels" "{channel-id}" "messages" "{message-id}" "reactions" "{emoji}"
                               #:channel-id channel-id)
-                  (client-http-client client) `((message-id . ,message-id) (emoji . ,emoji)))))
+                  (client-http-client client) `((message-id . ,message-id) (emoji . ,emoji))
+                  #:params params)))
 
 (define (delete-all-reactions client channel-id message-id)
   (run-route (make-route delete "channels" "{channel-id}" "messages" "{message-id}"
@@ -234,9 +260,10 @@
              (client-http-client client)))
 
 (define (get-pinned-messages client channel-id)
-  (map hash->message (run-route (make-route get "channels" "{channel-id}" "pins"
-                                           #:channel-id channel-id)
-                               (client-http-client client))))
+  (map hash->message
+       (run-route (make-route get "channels" "{channel-id}" "pins"
+                              #:channel-id channel-id)
+                  (client-http-client client))))
 
 (define (add-pinned-channel-message client channel-id message-id)
   (run-route (make-route put "channels" "{channel-id}" "pins" "{message-id}"
@@ -253,7 +280,7 @@
                          #:channel-id channel-id)
              (client-http-client client) `((user-id . ,user-id))
              #:data (jsexpr->string (hash 'access_token access-token
-                                          'nick nick))))
+                                         'nick nick))))
 
 (define (group-dm-remove-recipient client channel-id user-id)
   (run-route (make-route delete "channels" "{channel-id}" "recipients" "{user-id}"
@@ -271,9 +298,9 @@
 
 (define (get-guild-emoji client guild-id emoji-id)
   (hash->emoji
-       (run-route (make-route get "guilds" "{guild-id}" "emojis" "{emoji-id}"
-                              #:guild-id guild-id)
-                  (client-http-client client) `((emoji-id . ,emoji-id)))))
+   (run-route (make-route get "guilds" "{guild-id}" "emojis" "{emoji-id}"
+                          #:guild-id guild-id)
+              (client-http-client client) `((emoji-id . ,emoji-id)))))
 
 
 (define (create-guild-emoji client guild-id name image roles)
@@ -315,9 +342,9 @@
               (client-http-client client) #:data (jsexpr->string data))))
 
 (define (delete-guild client guild-id)
-   (run-route (make-route delete "guilds" "{guild-id}"
-                          #:guild-id guild-id)
-              (client-http-client client)))
+  (run-route (make-route delete "guilds" "{guild-id}"
+                         #:guild-id guild-id)
+             (client-http-client client)))
 
 (define (get-guild-channels client guild-id)
   (map (lambda (data) (hash->channel data #:guild-id guild-id))
@@ -342,13 +369,12 @@
                             #:guild-id guild-id)
                 (client-http-client client) `((user-id . ,user-id)))))
 
-(define (list-guild-member client guild-id #:limit [limit 1] #:after [after 0])
-  (map hash->member (run-route
-                    (make-route get "guilds" "{guild-id}" "members"
-                                #:guild-id guild-id)
-                    (client-http-client client) #:data (jsexpr->string
-                                                        (hash 'limit limit
-                                                              'afer after)))))
+(define (list-guild-members client guild-id #:limit [limit 1] #:after [after 0])
+  (map hash->member
+       (run-route (make-route get "guilds" "{guild-id}" "members"
+                              #:guild-id guild-id)
+                  (client-http-client client)
+                  #:params `((limit . ,limit) (after . ,after)))))
 
 (define (add-guild-member client guild-id user-id data)
   (hash->member (run-route
@@ -378,8 +404,8 @@
                          #:guild-id guild-id)
              (client-http-client client) `((user-id . ,user-id) (role-id . ,role-id))))
 
-(define (add-guild-member client guild-id user-id)
-  (run-route (make-route put "guilds" "{guild-id}" "members" "{user-id}"
+(define (remove-guild-member client guild-id user-id)
+  (run-route (make-route delete "guilds" "{guild-id}" "members" "{user-id}"
                          #:guild-id guild-id)
              (client-http-client client) `((user-id . ,user-id))))
 
@@ -387,3 +413,232 @@
   (run-route (make-route get "guilds" "{guild-id}" "bans"
                          #:guild-id guild-id)
              (client-http-client client)))
+
+(define (create-guild-ban client guild-id user-id [days 1])
+  (run-route (make-route put "guilds" "{guild-id}" "bans" "{user-id}"
+                         #:guild-id guild-id)
+             (client-http-client client) `((user-id . ,user-id))
+             #:params `((delete-message-days . ,days))))
+
+(define (remove-guild-ban client guild-id user-id)
+  (run-route (make-route delete "guilds" "{guild-id}" "bans" "{user-id}"
+                         #:guild-id guild-id)
+             (client-http-client client) `((user-id . ,user-id))))
+
+(define (get-guild-roles client guild-id)
+  (map hash->role (run-route (make-route get "guilds" "{guild-id}" "roles"
+                                        #:guild-id guild-id)
+                            (client-http-client client))))
+
+(define (create-guild-role client guild-id data)
+  (hash->role (run-route
+              (make-route post "guilds" "{guild-id}" "roles"
+                          #:guild-id guild-id)
+              (client-http-client client) (jsexpr->string data))))
+
+(define (modify-guild-role-positions client guild-id id position)
+  (map hash->role
+       (run-route (make-route patch "guilds" "{guild-id}" "roles"
+                              #:guild-id guild-id)
+                  (client-http-client client) #:data (jsexpr->string
+                                                      (hash 'id id
+                                                            'position position)))))
+
+(define (modify-guild-role client guild-id role-id data)
+  (hash->role (run-route
+              (make-route patch "guilds" "{guild-id}" "roles" "{role-id}"
+                          #:guild-id guild-id)
+              (client-http-client client) `((role-id . ,role-id))
+              #:data (jsexpr->string data))))
+
+(define (delete-guild-role client guild-id role-id)
+  (run-route (make-route delete "guilds" "{guild-id}" "roles" "{guild-id}"
+                         #:guild-id guild-id)
+             (client-http-client client) `((role-id . ,role-id))))
+
+(define (get-guild-prune-count client guild-id days)
+  (hash-ref (run-route (make-route get "guilds" "{guild-id}" "prune"
+                                   #:guild-id guild-id)
+                       (client-http-client client)
+                       #:params `((days . ,days)))
+            'pruned))
+
+(define (begin-guild-prune client guild-id days)
+  (hash-ref (run-route (make-route post "guilds" "{guild-id}" "prune"
+                                   #:guild-id guild-id)
+                       (client-http-client client)
+                       #:params `((days . ,days)))
+            'pruned))
+
+;; Would be here: voice regions
+
+(define (get-guild-invites client guild-id)
+  (map hash->invite
+       (run-route (make-route get "guilds" "{guild-id}" "invites"
+                              #:guild-id guild-id)
+                  (client-http-client client))))
+
+(define (get-guild-integrations client guild-id)
+  (run-route (make-route get "guilds" "{guild-id}" "integrations"
+                         #:guild-id guild-id)
+             (client-http-client client)))
+
+(define (create-guild-integration client guild-id type id)
+  (run-route (make-route post "guilds" "{guild-id}" "integrations"
+                         #:guild-id guild-id)
+             (client-http-client client) #:data (jsexpr->string
+                                                 (hash 'type type 'id id))))
+
+(define (modify-guild-integration client guild-id integration-id data)
+  (run-route (make-route patch "guilds" "{guild-id}" "integrations" "{integration-id}"
+                         #:guild-id guild-id)
+             (client-http-client client) `((integration-id . ,integration-id))
+             #:data (jsexpr->string data)))
+
+(define (delete-guild-integrations client guild-id integration-id)
+  (run-route (make-route delete "guilds" "{guild-id}" "integrations" "{integration-id}"
+                         #:guild-id guild-id)
+             (client-http-client client) `((integration-id . ,integration-id))))
+
+(define (sync-guild-integrations client guild-id integration-id)
+  (run-route (make-route post "guilds" "{guild-id}" "integrations" "{integration-id}" "sync"
+                         #:guild-id guild-id)
+             (client-http-client client) `((integration-id . ,integration-id))))
+
+(define (get-guild-embed client guild-id)
+  (run-route (make-route get "guilds" "{guild-id}" "embed"
+                         #:guild-id guild-id)
+             (client-http-client client)))
+
+(define (modify-guild-embed client guild-id data)
+  (run-route (make-route patch "guilds" "{guild-id}" "embed"
+                         #:guild-id guild-id)
+             (client-http-client client) #:data (jsexpr->string data)))
+
+;; USER ENDPOINTS
+
+(define (get-current-user client)
+  (hash->user (run-route (make-route get "users" "@me")
+                        (client-http-client client))))
+
+(define (get-user client user-id)
+  (hash->user (run-route (make-route get "users" "{user-id}")
+                        (client-http-client client) `((user-id . ,user-id)))))
+
+(define (modify-current-user client #:username [username null] #:avatar [avatar null])
+  (hash->user (run-route (make-route patch "users" "@me")
+                        (client-http-client client)
+                        #:data (jsexpr->string (hash-exclude-null
+                                               'username username
+                                               'avatar avatar)))))
+
+(define (get-current-user-guilds client
+                                 #:before [before null]
+                                 #:after [after null]
+                                 #:limit [limit null])
+  (map hash->guild
+       (run-route (make-route get "users" "@me" "guilds")
+                  (client-http-client client)
+                  #:params (filter-null `((before . ,before)
+                                          (after . ,after)
+                                          (limit . ,limit))))))
+
+
+(define (leave-guild client guild-id)
+  (run-route (make-route delete "users" "@me" "guilds" "{guild-id}"
+                         #:guild-id guild-id)
+             (client-http-client client)))
+
+(define (get-user-dms client)
+  (map hash->channel
+       (run-route (make-route get "users" "@me" "channels")
+                  (client-http-client client))))
+
+(define (create-dm client recipient-id)
+  (hash->channel (run-route
+                 (make-route post "users" "@me" "channels")
+                 (client-http-client client)
+                 #:data (jsexpr->string (hash 'recipient_id recipient-id)))))
+
+(define (create-group-dm client data)
+  (hash->channel (run-route
+                 (make-route post "users" "@me" "channels")
+                 (client-http-client client)
+                 #:data (jsexpr->string data))))
+
+;; WEBHOOK ENDPOINTS
+
+(define (create-webhook client channel-id name avatar)
+  (hash->webhook (run-route
+                 (make-route post "channels" "{channel-id}" "webhooks"
+                             #:channel-id channel-id)
+                 (client-http-client client)
+                 #:data (jsexpr->string (hash
+                                        'name name
+                                        'avatar avatar)))))
+
+(define (get-channel-webhooks client channel-id)
+  (map hash->webhook
+       (run-route (make-route get "channels" "{channel-id}" "webhooks"
+                              #:channel-id channel-id)
+                  (client-http-client client))))
+
+(define (get-guild-webhooks client guild-id)
+  (map hash->webhook
+       (run-route (make-route get "guilds" "{guild-id}" "webhooks"
+                              #:guild-id guild-id)
+                  (client-http-client client))))
+
+(define (get-webhook client webhook-id)
+  (hash->webhook (run-route
+                 (make-route get "webhooks" "{webhook-id}"
+                             #:webhook-id webhook-id)
+                 (client-http-client client))))
+
+(define (get-webhook-with-token client webhook-id webhook-token)
+  (hash->webhook (run-route
+                 (make-route get "webhooks" "{webhook-id}" "{webhook-token}"
+                             #:webhook-id webhook-id)
+                 (client-http-client client) `((webhook-token . ,webhook-token)))))
+
+(define (modify-webhook client webhook-id data
+                        #:name [name null]
+                        #:avatar [avatar null]
+                        #:channel-id [channel-id null])
+  (hash->webhook (run-route
+                 (make-route patch "webhooks" "{webhook-id}"
+                             #:webhook-id webhook-id)
+                 (client-http-client client)
+                 #:data (jsexpr->string (hash-exclude-null
+                                        'name name
+                                        'avatar avatar
+                                        'channel_id channel-id)))))
+
+(define (modify-webhook-with-token client webhook-id data token
+                        #:name [name null]
+                        #:avatar [avatar null]
+                        #:channel-id [channel-id null])
+  (hash->webhook (run-route
+                  (make-route patch "webhooks" "{webhook-id}"
+                              #:webhook-id webhook-id)
+                  (client-http-client client)
+                  #:data (jsexpr->string (hash-exclude-null
+                                          'name name
+                                          'avatar avatar
+                                          'channel_id channel-id)))))
+(define (delete-webhook client webhook-id)
+  (run-route (make-route delete "webhooks" "{webhook-id}"
+                         #:webhook-id webhook-id)
+             (client-http-client client)))
+
+(define (delete-webhool-with-token client webhook-id webhook-token)
+  (run-route (make-route delete "webhooks" "{webhook-id}" "{webhook-token}"
+                         #:webhook-id webhook-id)
+             (client-http-client client) `((webhook-token . ,webhook-token))))
+
+(define (execute-webhook client webhook-id webhook-token data #:wait [wait #f])
+  (run-route (make-route post "webhooks" "{webhook-id}" "{webhook-token}"
+                         #:webhook-id webhook-id)
+             (client-http-client client)
+             #:params `((wait . ,wait))
+             #:data (jsexpr->string data)))

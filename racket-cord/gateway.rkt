@@ -121,9 +121,9 @@
   (unless (null? (ws-client-heartbeat-thread client))
     (kill-thread (ws-client-heartbeat-thread client)))
   (set-ws-client-heartbeat-thread! client null)
-  (ws-close! (ws-client-ws client
-                           #:status status
-                           #:reason reason)))
+  (ws-close! (ws-client-ws client)
+             #:status status
+             #:reason reason))
 
 (define (ws-loop client)
   (thread

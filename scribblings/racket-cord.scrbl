@@ -1,6 +1,6 @@
 #lang scribble/manual
-@require[@for-label[racket-cord
-                    racket/base]]
+@require[racket-cord
+        @for-label[racket-cord]]
 
 @title{racket-cord}
 @author{Ben Simms}

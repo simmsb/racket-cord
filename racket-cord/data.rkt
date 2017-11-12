@@ -252,8 +252,8 @@
      (dm-channel
       (hash-ref data 'id)
       (hash-ref data 'type)
-      (hash-ref data 'name)
-      (hash-ref data 'last_message_id)
+      (hash-ref data 'name null)
+      (hash-ref data 'last_message_id null)
       (hash-ref data 'icon null)
       (hash-ref data 'recipients null)
       (hash-ref data 'owner_id null)

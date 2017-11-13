@@ -26,6 +26,7 @@
          hash->game
          hash->invite
          hash->webhook
+         game->hash
          update-guild
          update-channel
          update-user
@@ -322,6 +323,12 @@
    (hash-ref data 'name)
    (hash-ref data 'type)
    (hash-ref data 'url)))
+
+(define (game->hash game)
+  (hash
+   'name (game-name game)
+   'type (game-type game)
+   'url (game-url game)))
 
 (define (hash->invite data)
   (invite

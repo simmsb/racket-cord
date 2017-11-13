@@ -12,6 +12,7 @@
          start-client-no-wait
          stop-client
          on-event
+         update-status
          (all-from-out "utils.rkt")
          (all-from-out "http.rkt")
          (struct-out game)
@@ -75,3 +76,12 @@
   (for ([shard (client-shards client)])
     (disconnect shard))
   (semaphore-post (client-running client)))
+
+(define (update-status client guild-id
+                       #:since [since null]
+                       #:game [game null]
+                       #:status status
+                       #:afk afk)
+  (let* ([guild (get-guild client guild-id)]
+         [shard (list-ref (client-shards client) (guild-shard-id guild))])
+    (send-status-update shard since game status afk)))

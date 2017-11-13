@@ -12,7 +12,9 @@
 
 (provide new-ws-client
          connect
-         disconnect)
+         disconnect
+         send-request-guild-members
+         send-status-update)
 
 
 (define op-dispatch  0)
@@ -81,6 +83,27 @@
         'token token
         'session_id session-id
         'seq seq))))
+
+(define (send-request-guild-members client guild-id #:query [query ""] #:limit [limit 0])
+  (log-discord-debug "REQUESTING GUILD MEMBERS")
+  (ws-send! (ws-client-ws client) (jsexpr->string
+                                   (hasheq
+                                    'op op-request-guild-members
+                                    'd (hasheq
+                                        'guild_id guild-id
+                                        'query query
+                                        'limit 'limit)))))
+
+(define (send-status-update client since game status afk)
+  (log-discord-debug "SENDING STATUS UPDATE")
+  (ws-send! (ws-client-ws client) (jsexpr->string
+                                   (hasheq
+                                    'op op-status-update
+                                    'd (hasheq
+                                        'since since
+                                        'game (game->hash game)
+                                        'status status
+                                        'afk afk)))))
 
 (define (send-identify client presence)
   (log-discord-debug "IDENTIFYING")

@@ -6,7 +6,7 @@ We're going to make a discord lib in racket and it'll be great if I ever bother 
 ```racket
 #lang racket
 
-(require "racket-cord/main.rkt")
+(require racket-cord)
 
 (define bot-token (getenv "BOT_TOKEN"))
 

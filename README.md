@@ -1,5 +1,9 @@
 # racket-cord
+
+[![Build Status](https://travis-ci.org/nitros12/racket-cord.svg?branch=master)](https://travis-ci.org/nitros12/racket-cord)
+
 [Racket package](https://pkgd.racket-lang.org/pkgn/package/racket-cord)
+
 [Docs](https://docs.racket-lang.org/racket-cord/index.html)
 
 # example

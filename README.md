@@ -1,5 +1,6 @@
 # racket-cord
-We're going to make a discord lib in racket and it'll be great if I ever bother to actually write it.
+[Racket package](https://pkgd.racket-lang.org/pkgn/package/racket-cord)
+[Docs](https://docs.racket-lang.org/racket-cord/index.html)
 
 # example
 

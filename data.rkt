@@ -181,8 +181,8 @@
 
 (struct invite
   (code
-   guild
-   channel)
+   guild-id
+   channel-id)
   #:transparent)
 
 (struct webhook
@@ -313,7 +313,7 @@
   (emoji
    (hash-ref data 'id)
    (hash-ref data 'name)
-   (extract-and-parse data 'roles hash->role)
+   (hash-ref data 'roles null)
    (hash-ref data 'user null)
    (hash-ref data 'require_colons)
    (hash-ref data 'managed)))
@@ -333,8 +333,8 @@
 (define (hash->invite data)
   (invite
    (hash-ref data 'code)
-   (hash-ref data 'guild)
-   (hash-ref data 'channel)))
+   (hash-ref (hash-ref data 'guild) 'id)
+   (hash-ref (hash-ref data 'channel) 'id)))
 
 (define (hash->webhook data)
   (webhook

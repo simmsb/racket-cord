@@ -49,7 +49,8 @@
               (let ([old-channel (get-channel client (hash-ref data 'id))]
                     [new-channel (hash->channel data)])
                 (each funs client old-channel new-channel))]
-             [(guild-create guild-delete) (each funs client (hash->guild (ws-client-shard-id ws-client) data))]
+             [(guild-create guild-delete)
+              (each funs client (hash->guild (ws-client-shard-id ws-client) data))]
              [(guild-update)
               (let ([old-guild (get-guild client (hash-ref data 'id))]
                     [new-guild (hash->guild (ws-client-shard-id ws-client) data)])
@@ -62,14 +63,12 @@
                 (each funs client guild (map hash->emoji (hash-ref data 'emojis))))]
              [(guild-member-add)
               (let ([guild (get-guild client (hash-ref data 'guild_id))])
-                (each funs client (hash->member data)
-                      guild))]
+                (each funs client (hash->member data) guild))]
              [(guild-member-remove) ;; get guild object, get member object from guild object
               (each funs client (get-member client (member-hash-id data) (hash-ref data 'guild_id)))]
              [(guild-member-update presence-update)
               (let ([old-member (get-member client (member-hash-id data) (hash-ref data 'guild_id))])
-                (each funs client old-member
-                      (update-member old-member data)))]
+                (each funs client old-member (update-member old-member data)))]
              [(message-create) (each funs client (hash->message data))]
              [(message-delete) (each funs client (hash-ref data 'id))] ;; MAYBE: cache messages
              [(message-reaction-add message-reaction-remove)

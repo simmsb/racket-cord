@@ -80,8 +80,8 @@
 (define (update-status client guild-id
                        #:since [since null]
                        #:game [game null]
-                       #:status status
-                       #:afk afk)
+                       #:status [status "online"]
+                       #:afk [afk #f])
   (let* ([guild (get-guild client guild-id)]
          [shard (list-ref (client-shards client) (guild-shard-id guild))])
     (send-status-update shard since game status afk)))

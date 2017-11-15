@@ -1,7 +1,8 @@
 #lang scribble/manual
 @require[@for-label[racket-cord
                     json
-                    net/rfc6455]
+                    net/rfc6455
+                    simple-http]
                    @for-label[@except-in[racket/base member]]]
 
 @title{racket-cord: Racket discord library}
@@ -264,12 +265,12 @@ Event callbacks and their types are described here:
 
 @deftogether[(
   @defproc[(channel-create [client client?]
-                           [channel channel?]) void?]
+                           [channel (or/c dm-channel? guild-channel?)]) void?]
   @defproc[(channel-delete [client client?]
-                           [channel channel?]) void?]
+                           [channel (or/c dm-channel? guild-channel?)]) void?]
   @defproc[(channel-update [client client?]
-                           [old-channel channel?]
-                           [new-channel channel?]) void?]
+                           [old-channel (or/c dm-channel? guild-channel?)]
+                           [new-channel (or/c dm-channel? guild-channel?)]) void?]
   @defproc[(guild-create [client client?]
                          [guild guild?]) void?]
   @defproc[(guild-delete [client client?]
@@ -326,10 +327,10 @@ All raw events have the form:
 
 @section{Miscellaneous functions}
 
-@defproc[(get-channels [client client?]) (listof channel?)]
+@defproc[(get-channels [client client?]) (listof guild-channel?)]
 
 @defproc[(get-channel [client client?]
-                      [id string?]) (or/c channel? null?)]{
+                      [id string?]) (or/c guild-channel? null?)]{
 Get a channel by id. Returns @racket[null] on failure.
 }
 
@@ -350,15 +351,15 @@ HTTP requests are defined here. Ratelimiting is handled for you by the library.
 Requests that fail raise a @racket[exn:fail:network:http:discord?] exception.
 
 @defproc[(http:get-channel [client client?]
-                      [channel-id string?])
-                      channel?]{
+                           [channel-id string?])
+                           (or/c dm-channel? guild-channel?)]{
 Request a channel.
 }
 
 @defproc[(http:modify-channel [client client?]
                               [channel-id string?]
                               [data hash?])
-                              channel?]{
+                              (or/c dm-channel? guid-channel?)]{
 @racket[data] should be a hashmap that conforms to @link["https://discordapp.com/developers/docs/resources/channel#modify-channel"]{Modify Channel}.
 }
 
@@ -369,7 +370,7 @@ Request a channel.
                                     [channel-id string?]
                                     [params (cons/c string? string?)] ...)
                                     (listof message?)]{
-Params provided should be cons cells of @racket['(k . v)] conforming to @link["https://discordapp.com/developers/docs/resources/channel#get-channel-messages"]{Get Channel Message}.
+@racket[params] provided should be cons cells of @racket['(k . v)] conforming to @link["https://discordapp.com/developers/docs/resources/channel#get-channel-messages"]{Get Channel Message}.
 }
 
 @defproc[(http:get-channel-message [client client?]
@@ -413,7 +414,7 @@ Params provided should be cons cells of @racket['(k . v)] conforming to @link["h
                              [emoji string?]
                              [params (cons string? string?)] ...)
                              (listof user?)]{
-Params provided should be cons cells of @racket['(k . v)] conforming to @link["https://discordapp.com/developers/docs/resources/channel#get-reactions"]{Get Reactions}.
+@racket[params] provided should be cons cells of @racket['(k . v)] conforming to @link["https://discordapp.com/developers/docs/resources/channel#get-reactions"]{Get Reactions}.
 }
 
 @defproc[(http:delete-all-reactions [client client?]
@@ -493,21 +494,253 @@ Params provided should be cons cells of @racket['(k . v)] conforming to @link["h
                                   [guild-id string?]
                                   [emoji-id string?]) jsexpr?]
 
+@defproc[(http:get-guild [client client?]
+                         [guild-id string?]) guild?]
+
+@defproc[(http:modify-guild [client client?]
+                            [guild-id string?]
+                            [data hash?]) guild?]{
+@racket[data] should be a hashmap that conforms to @link["https://discordapp.com/developers/docs/resources/guild#modify-guild"]{Modify Guild}.
+}
+
+@defproc[(http:delete-guild [client client?]
+                            [guild-id string?]) jsexpr?]
+
+@defproc[(http:get-guild-channels [client client?]
+                                  [guild-id string?]) (listof guild-channel?)]
+
+@defproc[(http:create-guild-channel [client client?]
+                                    [guild-id string?]
+                                    [data hash?]) guild-channel?]{
+@racket[data] should be a hashmap that conforms to @link["https://discordapp.com/developers/docs/resources/guild#create-guild-channel"]{Create Guild Channel}.
+}
+
+@defproc[(http:modify-guild-channel-permissions [client client?]
+                                                [guild-id string?]
+                                                [data hash?])]{
+@racket[data] should be a hashmap that conforms to @link["https://discordapp.com/developers/docs/resources/guild#modify-guild-channel-permissions"]{Modify Guild Channel Positions}.
+}
+
+@defproc[(http:get-guild-member [client client?]
+                                [guild-id string?]
+                                [user-id string?]) member?]
+
+@defproc[(http:list-guild-members [client client?]
+                                  [guild-id string?]
+                                  [#:limit limit integer? 1]
+                                  [#:after after integer? 0]) (listof member?)]
+
+@defproc[(http:add-guild-member [client client?]
+                                [guild-id string?]
+                                [user-id string?]
+                                [data hash?]) member?]{
+@racket[data] should be a hashmap that conforms to @link["https://discordapp.com/developers/docs/resources/guild#add-guild-member"]{Add Guild Member}.
+}
+
+@defproc[(http:modify-guild-member [client client?]
+                                   [guild-id string?]
+                                   [user-id string?]
+                                   [data hash?]) jsexpr?]{
+@racket[data] should be a hashmap that conforms to @link["https://discordapp.com/developers/docs/resources/guild#modify-guild-member"]{Modify Guild Member}.
+}
+
+@defproc[(http:modify-user-nick [client client?]
+                                [guild-id string?]
+                                [nick string?]) jsexpr?]
+
+@defproc[(http:add-guild-member-rols [client client?]
+                                     [guild-id string?]
+                                     [user-id string?]
+                                     [role-id string?]) jsexpr?]
+
+@defproc[(http:remove-guild-member-role [client client?]
+                                        [guild-id string?]
+                                        [user-id string?]
+                                        [role-id string?]) jsexpr?]
+
+@defproc[(http:remove-guild-member [client client?]
+                                   [guild-id string?]
+                                   [user-id string?]) jsexpr?]
+
+@defproc[(http:get-guild-bans [client client?]
+                              [guild-id string?]) jsexpr?]
+
+@defproc[(http:create-guild-ban [client client?]
+                                [guild-id string?]
+                                [user-id string?]
+                                [days integer? 1]) jsexpr?]
+
+@defproc[(http:remove-guild-ban [client client?]
+                                [guild-id string?]
+                                [user-id string?]) jsexpr?]
+
+@defproc[(http:get-guild-roles [client client?]
+                               [guild-id string?]) (listof role?)]
+
+@defproc[(http:create-guild-role [client client?]
+                                 [guild-id string?]
+                                 [data hash?]) role?]{
+@racket[data] should be a hashmap that conforms to @link["https://discordapp.com/developers/docs/resources/guild#create-guild-role"]{Create Guild Role}.
+}
+
+@defproc[(http:modify-guild-role-positions [client client?]
+                                           [guild-id string?]
+                                           [data hash?]) (listof role?)]{
+@racket[data] should be a hashmap that conforms to @link["https://discordapp.com/developers/docs/resources/guild#modify-guild-role-positions"]{Modify Guild Role Positions}.
+}
+
+@defproc[(http:modify-guild-role [client client?]
+                                 [guild-id string?]
+                                 [role-id string?]
+                                 [data hash?]) role?]{
+@racket[data] should be a hashmap that conforms to @link["https://discordapp.com/developers/docs/resources/guild#modify-guild-role"]{Modify Guild Role}.
+}
+
+@defproc[(http:delete-guild-role [client client?]
+                                 [guild-id string?]
+                                 [role-id string?]) jsexpr?]
+
+@defproc[(http:get-guild-prune-count [client client?]
+                                     [guild-id string?]
+                                     [days integer?]) integer?]
+
+@defproc[(http:begin-guild-prune [client client?]
+                                 [guild-id string?]
+                                 [days integer?]) integer?]
+
+@defproc[(http:get-guild-invites [client client?]
+                                 [guild-id string?]) (listof invite?)]
+
+@defproc[(http:get-guild-integrations [client client?]
+                                      [guild-id string?]) jsexpr?]
+
+@defproc[(http:create-guild-integration [client client?]
+                                        [guild-id string?]
+                                        [type string?]
+                                        [id string?]) jsexpr?]
+
+@defproc[(http:modify-guild-integration [client client?]
+                                        [guild-id string?]
+                                        [integration-id string?]
+                                        [data hash?]) jsexpr?]{
+@racket[data] should be a hashmap that conforms to @link["https://discordapp.com/developers/docs/resources/guild#modify-guild-integration"]{Modify Guild Integration}.
+}
+
+@defproc[(http:delete-guild-integration [client client?]
+                                        [guild-id string?]
+                                        [integration-id string?]) jsexpr?]
+
+@defproc[(http:sync-guild-integrations [client client?]
+                                       [guild-id string?]
+                                       [integration-id string?]) jsexpr?]
+
+@defproc[(http:get-guild-embed [client client?]
+                               [guild-id string?]) jsexpr?]
+
+@defproc[(http:modify-guild-embed [client client?]
+                                  [guild-id string?]
+                                  [data hash?]) jsexpr?]{
+@racket[data] should be a hashmap that conforms to @link["https://discordapp.com/developers/docs/resources/guild#modify-guild-embed"]{Modify Guild Embed}.
+}
+
+@defproc[(http:get-current-user [client client]) user?]
+
+@defproc[(http:get-user [client client?]
+                        [user-id string?]) user?]
+
+@defproc[(http:modify-current-user [client client?]
+                                   [#:username username string? null]
+                                   [#:avatar avatar bytes? null]
+                                   [#:avatar-type avatar-type string? ""]) user?]
+
+@defproc[(http:get-current-user-guilds [client client?]
+                                       [#:before before integer? null]
+                                       [#:after after integer? null]
+                                       [#:limit limit integer? null]) (listof guild?)]
+
+@defproc[(http:leave-guild [client client?]
+                           [guild-id string?]) jsexpr?]
+
+@defproc[(http:get-user-dms [client client?]) (listof dm-channel?)]
+
+@defproc[(http:create-dm [client client?]
+                         [recipient-id string?]) dm-channel?]
+
+@defproc[(http:create-group-dm [client client?]
+                               [data hash?]) dm-channel?]{
+@racket[data] should be a hashmap that conforms to @link["https://discordapp.com/developers/docs/resources/user#create-group-dm"]{Create Group DM}.
+}
+
+@defproc[(http:create-webhook [client client?]
+                              [channel-id string?]
+                              [name string?]
+                              [avatar bytes?]
+                              [avatar-type string?]) jsexpr?]
+
+@defproc[(http:get-channel-webhooks [client client?]
+                                    [channel-id string?]) jsexpr?]
+
+@defproc[(http:get-guild-webhooks [client client?]
+                                  [guild-id string?]) jsexpr?]
+
+@defproc[(http:get-webhook [client client?]
+                           [webhook-id string?]) jsexpr?]
+
+@defproc[(http:get-webhook-with-token [client client?]
+                                      [webhook-id string?]
+                                      [webhook-token string?]) jsexpr?]
+
+@defproc[(http:modify-webhook [client client?]
+                              [webhook-id string?]
+                              [#:name name string? null]
+                              [#:avatar avatar bytes? null]
+                              [#:avatar-type avatar-type string? ""]
+                              [#:channel-id channel-id string? null]) jsexpr?]
+
+@defproc[(http:modify-webhook-with-token [client client?]
+                                         [webhook-id string?]
+                                         [token string?]
+                                         [#:name name string? null]
+                                         [#:avatar avatar bytes null]
+                                         [#:avatar-type avatar-type string ""]
+                                         [#:channel-id channel-id string? null]) jsexpr?]
+
+@defproc[(http:delete-webhook [client client?]
+                              [webhook-id string?]) jsexpr?]
+
+@defproc[(http:delete-webhook-with-token [client client?]
+                                         [webhook-id string?]
+                                         [webhook-token string?]) jsexpr?]
+
+@defproc[(http:execute-webhook [client client?]
+                               [webhook-id string?]
+                               [webhook-token string?]
+                               [data hash?]
+                               [#:wait wait boolean? #f]) jsexpr?]{
+@racket[data] should be a hashmap that conforms to @link["https://discordapp.com/developers/docs/resources/webhook#execute-webhook"]{Execute Webhook}.
+}
+
 @section{Exceptions}
 
 @defstruct*[
   http:exn:fail:network:http:discord
   ([message string?]
   [continuation-marks continuation-mark-set?]
-  [code number?]
-  [json-code number?]
-  [message string?])
+  [http-code number?]
+  [discord-code number?]
+  [reason string?])
   #:transparent]{
   Raised when a http error code is retrieved from discord.
+}
 
-code: The HTTP response code.
+@section{Additional}
 
-json-code: The error code sent by discord.
+@defthing[discord-logger logger?]{Logger of discord events in the library.}
 
-message: The error string sent by discord.
+@defstruct*[
+  http:http-client
+  ([requester requester?]
+  [global-lock semaphore?]
+  [ratelimits (hash/c string? semaphore?)])]{
+Internal http client of the library, holds ratelimiting state.
 }

@@ -26,7 +26,7 @@
                      rfc2822->unix-seconds
                      run-route))
 
-(struct exn:fail:network:http:discord exn:fail (code json-code message) #:transparent)
+(struct exn:fail:network:http:discord exn:fail (http-code discord-code reason) #:transparent)
 
 (define (make-discord-http token)
   (update-headers
@@ -282,7 +282,7 @@
                          #:channel-id channel-id)
              (client-http-client client) `((user-id . ,user-id))
              #:data (jsexpr->string (hash 'access_token access-token
-                                          'nick nick))))
+                                         'nick nick))))
 
 (define (group-dm-remove-recipient client channel-id user-id)
   (run-route (make-route delete "channels" "{channel-id}" "recipients" "{user-id}"
@@ -311,7 +311,7 @@
                           #:guild-id guild-id)
               (client-http-client client) #:data (jsexpr->string
                                                   (hash 'name name
-                                                        'image (image-data->base64 type image)
+                                                        'image (image-data->base64 image-type image)
                                                         'roles roles)))))
 
 (define (modify-guild-emoji client guild-id emoji-id name roles)
@@ -356,9 +356,9 @@
 
 (define (create-guild-channel client guild-id data)
   (hash->channel (run-route
-                  (make-route post "guilds" "{guild-id}" "channnels"
-                              #:guild-id guild-id)
-                  (client-http-client client) #:data (jsexpr->string data))))
+                 (make-route post "guilds" "{guild-id}" "channnels"
+                             #:guild-id guild-id)
+                 (client-http-client client) #:data (jsexpr->string data))))
 
 (define (modify-guild-channel-permissions client guild-id data)
   (run-route (make-route patch "guilds" "{guild-id}" "channels"
@@ -367,9 +367,9 @@
 
 (define (get-guild-member client guild-id user-id)
   (hash->member (run-route
-                 (make-route get "guilds" "{guild-id}" "members" "{user-id}"
-                             #:guild-id guild-id)
-                 (client-http-client client) `((user-id . ,user-id)))))
+                (make-route get "guilds" "{guild-id}" "members" "{user-id}"
+                            #:guild-id guild-id)
+                (client-http-client client) `((user-id . ,user-id)))))
 
 (define (list-guild-members client guild-id #:limit [limit 1] #:after [after 0])
   (map hash->member
@@ -380,10 +380,10 @@
 
 (define (add-guild-member client guild-id user-id data)
   (hash->member (run-route
-                 (make-route put "guilds" "{guild-id}" "members" "{user-id}"
-                             #:guild-id guild-id)
-                 (client-http-client client) `((user-id . ,user-id))
-                 #:data (jsexpr->string data))))
+                (make-route put "guilds" "{guild-id}" "members" "{user-id}"
+                            #:guild-id guild-id)
+                (client-http-client client) `((user-id . ,user-id))
+                #:data (jsexpr->string data))))
 
 (define (modify-guild-member client guild-id user-id data)
   (run-route (make-route patch "guilds" "{guild-id}" "members" "{guild-id}"
@@ -429,29 +429,27 @@
 
 (define (get-guild-roles client guild-id)
   (map hash->role (run-route (make-route get "guilds" "{guild-id}" "roles"
-                                         #:guild-id guild-id)
-                             (client-http-client client))))
+                                        #:guild-id guild-id)
+                            (client-http-client client))))
 
 (define (create-guild-role client guild-id data)
   (hash->role (run-route
-               (make-route post "guilds" "{guild-id}" "roles"
-                           #:guild-id guild-id)
-               (client-http-client client) (jsexpr->string data))))
+              (make-route post "guilds" "{guild-id}" "roles"
+                          #:guild-id guild-id)
+              (client-http-client client) (jsexpr->string data))))
 
-(define (modify-guild-role-positions client guild-id id position)
+(define (modify-guild-role-positions client guild-id data)
   (map hash->role
        (run-route (make-route patch "guilds" "{guild-id}" "roles"
                               #:guild-id guild-id)
-                  (client-http-client client) #:data (jsexpr->string
-                                                      (hash 'id id
-                                                            'position position)))))
+                  (client-http-client client) #:data (jsexpr->string data))))
 
 (define (modify-guild-role client guild-id role-id data)
   (hash->role (run-route
-               (make-route patch "guilds" "{guild-id}" "roles" "{role-id}"
-                           #:guild-id guild-id)
-               (client-http-client client) `((role-id . ,role-id))
-               #:data (jsexpr->string data))))
+              (make-route patch "guilds" "{guild-id}" "roles" "{role-id}"
+                          #:guild-id guild-id)
+              (client-http-client client) `((role-id . ,role-id))
+              #:data (jsexpr->string data))))
 
 (define (delete-guild-role client guild-id role-id)
   (run-route (make-route delete "guilds" "{guild-id}" "roles" "{guild-id}"
@@ -521,18 +519,18 @@
 
 (define (get-current-user client)
   (hash->user (run-route (make-route get "users" "@me")
-                         (client-http-client client))))
+                        (client-http-client client))))
 
 (define (get-user client user-id)
   (hash->user (run-route (make-route get "users" "{user-id}")
-                         (client-http-client client) `((user-id . ,user-id)))))
+                        (client-http-client client) `((user-id . ,user-id)))))
 
-(define (modify-current-user client #:username [username null] #:avatar [avatar null])
+(define (modify-current-user client #:username [username null] #:avatar [avatar null] #:avatar-type [avatar-type ""])
   (hash->user (run-route (make-route patch "users" "@me")
-                         (client-http-client client)
-                         #:data (jsexpr->string (hash-exclude-null
-                                                 'username username
-                                                 'avatar avatar)))))
+                        (client-http-client client)
+                        #:data (jsexpr->string (hash-exclude-null
+                                               'username username
+                                               'avatar (if (null? avatar) null (image-data->base64 avatar-type avatar)))))))
 
 (define (get-current-user-guilds client
                                  #:before [before null]
@@ -558,26 +556,26 @@
 
 (define (create-dm client recipient-id)
   (hash->channel (run-route
-                  (make-route post "users" "@me" "channels")
-                  (client-http-client client)
-                  #:data (jsexpr->string (hash 'recipient_id recipient-id)))))
+                 (make-route post "users" "@me" "channels")
+                 (client-http-client client)
+                 #:data (jsexpr->string (hash 'recipient_id recipient-id)))))
 
 (define (create-group-dm client data)
   (hash->channel (run-route
-                  (make-route post "users" "@me" "channels")
-                  (client-http-client client)
-                  #:data (jsexpr->string data))))
+                 (make-route post "users" "@me" "channels")
+                 (client-http-client client)
+                 #:data (jsexpr->string data))))
 
 ;; WEBHOOK ENDPOINTS
 
-(define (create-webhook client channel-id name avatar)
+(define (create-webhook client channel-id name avatar avatar-type)
   (hash->webhook (run-route
-                  (make-route post "channels" "{channel-id}" "webhooks"
-                              #:channel-id channel-id)
-                  (client-http-client client)
-                  #:data (jsexpr->string (hash
-                                          'name name
-                                          'avatar avatar)))))
+                 (make-route post "channels" "{channel-id}" "webhooks"
+                             #:channel-id channel-id)
+                 (client-http-client client)
+                 #:data (jsexpr->string (hash
+                                        'name name
+                                        'avatar (image-data->base64 avatar-type avatar))))))
 
 (define (get-channel-webhooks client channel-id)
   (map hash->webhook
@@ -593,19 +591,20 @@
 
 (define (get-webhook client webhook-id)
   (hash->webhook (run-route
-                  (make-route get "webhooks" "{webhook-id}"
-                              #:webhook-id webhook-id)
-                  (client-http-client client))))
+                 (make-route get "webhooks" "{webhook-id}"
+                             #:webhook-id webhook-id)
+                 (client-http-client client))))
 
 (define (get-webhook-with-token client webhook-id webhook-token)
   (hash->webhook (run-route
-                  (make-route get "webhooks" "{webhook-id}" "{webhook-token}"
-                              #:webhook-id webhook-id)
-                  (client-http-client client) `((webhook-token . ,webhook-token)))))
+                 (make-route get "webhooks" "{webhook-id}" "{webhook-token}"
+                             #:webhook-id webhook-id)
+                 (client-http-client client) `((webhook-token . ,webhook-token)))))
 
-(define (modify-webhook client webhook-id data
+(define (modify-webhook client webhook-id
                         #:name [name null]
                         #:avatar [avatar null]
+                        #:avatar-type [avatar-type ""]
                         #:channel-id [channel-id null])
   (hash->webhook (run-route
                   (make-route patch "webhooks" "{webhook-id}"
@@ -613,12 +612,13 @@
                   (client-http-client client)
                   #:data (jsexpr->string (hash-exclude-null
                                           'name name
-                                          'avatar avatar
+                                          'avatar (if (null? avatar) null (image-data->base64 avatar-type avatar))
                                           'channel_id channel-id)))))
 
-(define (modify-webhook-with-token client webhook-id data token
+(define (modify-webhook-with-token client webhook-id token
                                    #:name [name null]
                                    #:avatar [avatar null]
+                                   #:avatar-type [avatar-type ""]
                                    #:channel-id [channel-id null])
   (hash->webhook (run-route
                   (make-route patch "webhooks" "{webhook-id}"
@@ -626,14 +626,14 @@
                   (client-http-client client)
                   #:data (jsexpr->string (hash-exclude-null
                                           'name name
-                                          'avatar avatar
+                                          'avatar (if (null? avatar) null (image-data->base64 avatar-type avatar))
                                           'channel_id channel-id)))))
 (define (delete-webhook client webhook-id)
   (run-route (make-route delete "webhooks" "{webhook-id}"
                          #:webhook-id webhook-id)
              (client-http-client client)))
 
-(define (delete-webhool-with-token client webhook-id webhook-token)
+(define (delete-webhook-with-token client webhook-id webhook-token)
   (run-route (make-route delete "webhooks" "{webhook-id}" "{webhook-token}"
                          #:webhook-id webhook-id)
              (client-http-client client) `((webhook-token . ,webhook-token))))

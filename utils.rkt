@@ -9,7 +9,7 @@
 (define (bind f x)
   (if (null? x)
       null
-      (apply f x)))
+      (f x)))
 
 (define (bindap f x)
   (if (null? x)

@@ -22,8 +22,8 @@
   (hash-ref (client-guilds client) id null))
 
 (define (get-member client member-id guild-id)
-  (hash-ref (guild-members (get-guild client guild-id))
-            member-id))
+  (bindap hash-ref (bind guild-members (get-guild client guild-id))
+          (list member-id null)))
 
 (define (member-hash-id member)
   (hash-ref (hash-ref member 'user) 'id))

@@ -9,7 +9,7 @@
 (define (bind f x)
   (if (null? x)
       null
-      (f x)))
+      (apply f x)))
 
 (define (bindap f x)
   (if (null? x)
@@ -48,7 +48,7 @@
         [(? null?) (find-key (rest tables) key)]
         [x x])))
 
-(define (avatar-data->base64 type data)
+(define (image-data->base64 type data)
   (format "data:image/~a;base64,~a"
           type
           (base64-encode data)))

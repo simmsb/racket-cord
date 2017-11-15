@@ -1,5 +1,7 @@
 #lang scribble/manual
-@require[@for-label[racket-cord]
+@require[@for-label[racket-cord
+                    json
+                    net/rfc6455]
                    @for-label[@except-in[racket/base member]]]
 
 @title{racket-cord: Racket discord library}
@@ -91,8 +93,6 @@ The type of procedure passed is described in @secref{events}.
 @racket[evt]: A symbol of the event name, for example @racket['message-create]
 }
 
-@section{Data}
-
 @defstruct*[
   client
   ([shards list?]
@@ -134,10 +134,10 @@ Stores the state of the client.
   [joined-at string?]
   [large boolean?]
   [member-count integer?]
-  [voice-states any/c]
+  [voice-states jsexpr?]
   [members (listof member?)]
   [channels (hash/c string? guild-channel?)]
-  [presences (listof any/c)])]
+  [presences (listof jsexpr?)])]
 
 @defstruct*[
   guild-channel
@@ -145,7 +145,7 @@ Stores the state of the client.
   [type integer?]
   [guild-id string?]
   [position integer?]
-  [permission-overwrites (listof any/c)]
+  [permission-overwrites (listof jsexpr?)]
   [name string?]
   [topic string?]
   [nsfw boolean?]
@@ -200,9 +200,9 @@ Stores the state of the client.
   [mention-everyone boolean?]
   [mentions (listof user?)]
   [mention-roles (listof role?)]
-  [attachments any/c]
-  [embeds any/c]
-  [reactions any/c]
+  [attachments jsexpr?]
+  [embeds jsexpr?]
+  [reactions jsexpr?]
   [pinned boolean?]
   [type integer?])]
 
@@ -247,6 +247,7 @@ Stores the state of the client.
   [name (or/c string? null?)]
   [avatar (or/c string? null?)]
   [token string?])]
+
 
 @section[#:tag "events"]{Events}
 
@@ -315,3 +316,198 @@ Event callbacks and their types are described here:
   @defproc[(typing-start [client client?]
                          [channel-id string?]
                          [user-id string?]) void?])]
+
+Each event has a raw counterpart, for example @racket['raw-message-create].
+All raw events have the form:
+
+@defproc[(raw-event [ws-client ws-client?]
+                    [client client?]
+                    [data jsexpr?]) void?]
+
+@section{Miscellaneous functions}
+
+@defproc[(get-channels [client client?]) (listof channel?)]
+
+@defproc[(get-channel [client client?]
+                      [id string?]) (or/c channel? null?)]{
+Get a channel by id. Returns @racket[null] on failure.
+}
+
+@defproc[(get-guild [client client?]
+                    [id string?]) (or/c guild? null?)]{
+Get a guild by id. Returns @racket[null] on failure.
+}
+
+@defproc[(get-member [client client?]
+                     [member-id string?]
+                     [guild-id string?]) (or/c member? null?)]{
+Get a member of a guild by id. Returns null on failure.
+}
+
+@section{HTTP}
+
+HTTP requests are defined here. Ratelimiting is handled for you by the library.
+Requests that fail raise a @racket[exn:fail:network:http:discord?] exception.
+
+@defproc[(http:get-channel [client client?]
+                      [channel-id string?])
+                      channel?]{
+Request a channel.
+}
+
+@defproc[(http:modify-channel [client client?]
+                              [channel-id string?]
+                              [data hash?])
+                              channel?]{
+@racket[data] should be a hashmap that conforms to @link["https://discordapp.com/developers/docs/resources/channel#modify-channel"]{Modify Channel}.
+}
+
+@defproc[(http:delete-channel [client client?]
+                              [channel-id string?]) jsexpr?]
+
+@defproc[(http:get-channel-messages [client client?]
+                                    [channel-id string?]
+                                    [params (cons/c string? string?)] ...)
+                                    (listof message?)]{
+Params provided should be cons cells of @racket['(k . v)] conforming to @link["https://discordapp.com/developers/docs/resources/channel#get-channel-messages"]{Get Channel Message}.
+}
+
+@defproc[(http:get-channel-message [client client?]
+                                   [channel-id string?]
+                                   [message-id string?]) message?]
+
+@defproc[(http:create-message [client client?]
+                              [content string?]
+                              [#:embed embed jsexpr? null]
+                              [#:tts tts boolean? #f]) message?]
+
+@defproc[(http:edit-message [client client?]
+                            [channel-id string?]
+                            [message-id string?]
+                            [#:content content (or/c string? null?) null]
+                            [#:embed embed jsexpr? null]) message?]
+
+@defproc[(http:delete-message [client client?]
+                              [channel-id string?]
+                              [message-id string?]) jsexpr?]
+
+@defproc[(http:create-reaction [client client?]
+                               [channel-id string?]
+                               [message-id string?]
+                               [emoji string?]) jsexpr?]
+
+@defproc[(http:delete-own-reaction [client client?]
+                                   [channel-id string?]
+                                   [message-id string?]
+                                   [emoji string?]) jsexpr?]
+
+@defproc[(http:delete-user-reaction [client client?]
+                                    [channel-id string?]
+                                    [message-id string?]
+                                    [emoji string?]
+                                    [user-id string?]) jsexpr?]
+
+@defproc[(http:get-reactions [client client?]
+                             [channel-id string?]
+                             [message-id string?]
+                             [emoji string?]
+                             [params (cons string? string?)] ...)
+                             (listof user?)]{
+Params provided should be cons cells of @racket['(k . v)] conforming to @link["https://discordapp.com/developers/docs/resources/channel#get-reactions"]{Get Reactions}.
+}
+
+@defproc[(http:delete-all-reactions [client client?]
+                                    [channel-id string?]
+                                    [message-id string?]) jsexpr?]
+
+@defproc[(http:bulk-delete-messages [client client?]
+                                    [channel-id string?]
+                                    [ids string?] ...) jsexpr?]
+
+@defproc[(http:edit-channel-permissions [client client?]
+                                        [channel-id string?]
+                                        [overwrite-id string?]
+                                        [allow integer?]
+                                        [deny integer?]
+                                        [type string?]) jsexpr?]
+
+@defproc[(http:get-channel-invites [client client?]
+                                   [channel-id string?]) jsexpr?]
+
+@defproc[(http:create-channel-invite [client client?]
+                                     [channel-id string?]
+                                     [age integer? 86400]
+                                     [uses integer? 0]
+                                     [temporary boolean? #f]
+                                     [unique boolean #f]) invite?]
+
+@defproc[(http:delete-channel-permission [client client?]
+                                         [channel-id string?]
+                                         [overwrite-id string?]) jsexpr?]
+
+@defproc[(http:trigger-typing-indicator [client client?]
+                                        [channel-id string?]) jsexpr?]
+
+@defproc[(http:get-pinned-messages [client client?]
+                                   [channel-id string?]) (listof message?)]
+
+@defproc[(http:add-pinned-channel-message [client client?]
+                                          [channel-id string?]
+                                          [message-id string?]) jsexpr?]
+
+@defproc[(http:delete-pinned-channel-message [client client?]
+                                             [channel-id string?]
+                                             [message-id string?]) jsexpr?]
+
+@defproc[(http:group-dm-add-recipient [client client?]
+                                      [channel-id string?]
+                                      [user-id string?]
+                                      [access-token string?]
+                                      [nick string?]) jsexpr?]
+
+@defproc[(http:group-dm-remove-recipient [client client?]
+                                         [channel-id string?]
+                                         [user-id string?]) jsexpr?]
+
+@defproc[(http:list-guild-emoji [client client?]
+                                [guild-id string?]) (listof emoji?)]
+
+@defproc[(http:get-guild-emoji [client client?]
+                               [guild-id string?]
+                               [emoji-id string?]) emoji?]
+
+@defproc[(http:create-guild-emoji [client client?]
+                                  [guild-id string?]
+                                  [name string?]
+                                  [image bytes?]
+                                  [image-type string?]
+                                  [roles (listof string?)]) emoji?]
+
+@defproc[(http:modify-guild-emoji [client client?]
+                                  [guild-id string?]
+                                  [emoji-id string?]
+                                  [name string?]
+                                  [roles (listof string?)]) emoji?]
+
+@defproc[(http:delete-guild-emoji [client client?]
+                                  [guild-id string?]
+                                  [emoji-id string?]) jsexpr?]
+
+@section{Exceptions}
+
+@defstruct*[
+  http:exn:fail:network:http:discord
+  ([message string?]
+  [continuation-marks continuation-mark-set?]
+  [code number?]
+  [json-code number?]
+  [message string?])
+  #:transparent]{
+  Raised when a http error code is retrieved from discord.
+
+code: The HTTP response code.
+
+json-code: The error code sent by discord.
+
+message: The error string sent by discord.
+}

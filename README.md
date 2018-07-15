@@ -1,5 +1,7 @@
 # racket-cord
 
+A library for interfacing with discord using racket.
+
 [![Build Status](https://travis-ci.org/nitros12/racket-cord.svg?branch=master)](https://travis-ci.org/nitros12/racket-cord)
 
 [Racket package](https://pkgd.racket-lang.org/pkgn/package/racket-cord)
@@ -41,3 +43,10 @@
 
 (start-client myclient)
 ```
+
+# rationale
+I wanted to write a discord lib in a lisp,
+there were already some for CLisp at the time of writing so I chose to
+write one in a scheme, so I chose racket.
+
+Maybe now I would have tried to make it more general, idk.

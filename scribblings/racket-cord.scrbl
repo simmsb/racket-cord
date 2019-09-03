@@ -136,7 +136,7 @@ Stores the state of the client.
   [large boolean?]
   [member-count integer?]
   [voice-states jsexpr?]
-  [members (listof member?)]
+  [members (hash/c string? member?)]
   [channels (hash/c string? guild-channel?)]
   [presences (listof jsexpr?)])]
 

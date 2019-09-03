@@ -229,8 +229,10 @@
    (hash-ref data 'unavailable null)
    (hash-ref data 'member_count null)
    (hash-ref data 'voice_states null)
-   (extract-and-parse data 'members hash->member)
-   (bind make-hash (extract-and-parse data 'channels (get-id (lambda (d) (hash->channel d #:guild-id (hash-ref data 'id))))))
+   (bind make-hash (extract-and-parse data 'members (lambda (data) (cons (hash-ref (hash-ref data 'user) 'id)
+                                                                    (hash->member data)))))
+   (bind make-hash (extract-and-parse data 'channels
+                                      (get-id (lambda (d) (hash->channel d #:guild-id (hash-ref data 'id))))))
    (hash-ref data 'presences null)))
 
 (define (hash->channel data #:guild-id [guild-id null])
@@ -378,9 +380,9 @@
      (struct-copy dm-channel old-channel
                   [name (hash-ref data 'name (dm-channel-name old-channel))]
                   [last-message-id (hash-ref data 'last_message_id (dm-channel-last-message-id old-channel))]
-                  [recipients (if (null? (hash-ref data 'recipients null))
-                                  (dm-channel-recipients old-channel)
-                                  (extract-and-parse data 'recipients hash->user))]
+                  [recipients (if (hash-has-key? data 'recipients)
+                                  (extract-and-parse data 'recipients hash->user)
+                                  (dm-channel-recipients old-channel))]
                   [icon (hash-ref data 'icon (dm-channel-icon old-channel))])]))
 
 (define (update-user old-user data)
@@ -394,7 +396,7 @@
                [user (update-user (member-user old-member) (hash-ref data 'user))]
                [roles (hash-ref data 'roles null)]
                [status (hash-ref data 'status (member-status old-member))]
-               [game (if (null? (hash-ref data 'game))  ;; A bit messy
-                         (member-game data)
-                         (hash->game (hash-ref data 'game)))]
+               [game (if (hash-has-key? data 'game)  ;; A bit messy
+                         (hash->game (hash-ref data 'game))
+                         (member-game old-member))]
                [nick (hash-ref data 'nick (member-nick old-member))]))

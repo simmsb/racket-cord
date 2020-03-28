@@ -293,7 +293,7 @@
    (hash-ref data 'tts)
    (hash-ref data 'mention_everyone)
    (extract-and-parse data 'mentions hash->user)
-   (extract-and-parse data 'mention_roles hash->role)
+   (hash-ref data 'mention_roles)
    (hash-ref data 'attachments)
    (hash-ref data 'embeds)
    (hash-ref data 'reactions null)

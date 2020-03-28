@@ -321,10 +321,12 @@
    (hash-ref data 'managed)))
 
 (define (hash->game data)
-  (game
-   (hash-ref data 'name)
-   (hash-ref data 'type)
-   (hash-ref data 'url)))
+  (if (equal? data 'null)
+      null
+      (game
+        (hash-ref data 'name)
+        (hash-ref data 'type)
+        (hash-ref data 'url))))
 
 (define (game->hash game)
   (hash

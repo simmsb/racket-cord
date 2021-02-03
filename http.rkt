@@ -148,7 +148,7 @@
 ;; CHANNEL ENDPOINTS
 
 (define (get-channel client channel-id)
-  (hash->channel (run-route (make-route put "channels" "{channel-id}"
+  (hash->channel (run-route (make-route get "channels" "{channel-id}"
                                        #:channel-id channel-id)
                            (client-http-client client))))
 

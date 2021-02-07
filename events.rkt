@@ -147,8 +147,8 @@
 
 (define (event-channel-update ws-client client data)
   (let ([guild (get-guild client (hash-ref data 'guild_id))])
-    (hash-set! (guild-channels guild)
-               (hash-ref data 'guild_id) (update-channel data))))
+    (hash-update! (guild-channels guild)
+                  (hash-ref data 'guild_id) (lambda (old) (update-channel old data)))))
 
 (define (event-channel-delete ws-client client data)
   (let ([id (hash-ref data 'id)]

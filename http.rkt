@@ -8,6 +8,7 @@
                   json-response-body
                   json-response-headers)
          json
+         file/md5
          net/url
          racket/string
          srfi/19
@@ -16,6 +17,7 @@
          "utils.rkt")
 
 (provide (except-out (all-defined-out)
+                     generate-boundary
                      make-multipart
                      format-route
                      (struct-out route)
@@ -36,8 +38,30 @@
    (list (format "Authorization: ~a" token)
          "User-Agent: DiscordBot (https://github.com/nitros12/racket-cord, 0.0)")))
 
-(define (make-multipart req)
-  (update-headers req '("Content-Type: multipart/form-data")))
+(struct attachment
+  (data
+   type
+   name))
+
+(define (generate-boundary)
+  (bytes-append
+   #"-------------------------"
+   (md5 (call-with-output-bytes
+         (lambda (out)
+           (display (current-inexact-milliseconds) out))))))
+
+(define (make-multipart requester . parts)
+  (let ([boundary (generate-boundary)])
+    (values
+     (bytes-append
+      #"--" boundary #"\r\n"
+      (bytes-join
+       parts
+       (bytes-append #"\r\n--" boundary #"\r\n"))
+      #"\r\n--" boundary #"--\r\n")
+     (update-headers
+      requester
+      (list (format "Content-Type: multipart/form-data; boundary=~a" boundary))))))
 
 (struct http-client
   (requester
@@ -174,14 +198,42 @@
                              #:channel-id channel-id)
                  (client-http-client client) `((message-id . ,message-id)))))
 
-(define (create-message client channel-id content #:embed [embed null] #:tts [tts #f])
+(define (create-message client channel-id content
+                        #:embed [embed null]
+                        #:tts [tts #f]
+                        #:file [attachment #f])
   (let ([data (make-hash)])
     (unless (null? embed)
       (hash-set! data 'embed embed))
     (hash-set! data 'tts tts)
     (hash-set! data 'content content)
-    (hash->message (run-route (make-route post "channels" "{channel-id}" "messages" #:channel-id channel-id)
-                             (client-http-client client) #:data (jsexpr->string data)))))
+    (let*-values
+        ([(requester) (http-client-requester (client-http-client client))]
+         [(data requester)
+          (if attachment
+              (make-multipart
+               requester
+               (bytes-append
+                (string->bytes/utf-8
+                 (format
+                  (string-append
+                   "Content-Disposition: form-data; name=\"file\"; filename=~s\r\n"
+                   "Content-Type: ~a\r\n\r\n")
+                  (attachment-name attachment)
+                  (attachment-type attachment)))
+                (attachment-data attachment))
+               (string->bytes/utf-8
+                (string-append
+                 "Content-Disposition: form-data; name=\"payload_json\"\r\n"
+                 "Content-Type: application/json\r\n\r\n"
+                 (jsexpr->string data))))
+              (values
+               requester
+               (jsexpr->string data)))])
+      (hash->message (run-route (make-route post "channels" "{channel-id}" "messages" #:channel-id channel-id)
+                                (struct-copy http-client (client-http-client client)
+                                             [requester requester])
+                                #:data data)))))
 
 (define (edit-message client channel-id message-id #:content [content null] #:embed [embed null])
   (hash->message (run-route (make-route patch "channels" "{channel-id}" "messages" "{message-id}"

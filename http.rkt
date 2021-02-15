@@ -228,8 +228,8 @@
                  "Content-Type: application/json\r\n\r\n"
                  (jsexpr->string data))))
               (values
-               requester
-               (jsexpr->string data)))])
+               (jsexpr->string data)
+               requester))])
       (hash->message (run-route (make-route post "channels" "{channel-id}" "messages" #:channel-id channel-id)
                                 (struct-copy http-client (client-http-client client)
                                              [requester requester])

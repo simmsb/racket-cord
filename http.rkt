@@ -1,24 +1,15 @@
 #lang racket
 
-(require (only-in simple-http
-                  update-headers
-                  update-ssl
-                  update-host
-                  json-requester
-                  json-response-body
-                  json-response-headers)
+(require net/http-easy
          json
          file/md5
          net/url
          racket/string
          srfi/19
          "data.rkt"
-         "patched-simple-http.rkt"
          "utils.rkt")
 
 (provide (except-out (all-defined-out)
-                     generate-boundary
-                     make-multipart
                      format-route
                      (struct-out route)
                      make-route
@@ -26,42 +17,25 @@
                      gateway-params
                      discord-url
                      rfc2822->unix-seconds
-                     run-route))
+                     run-route
+                     attachment)
+         (contract-out
+          [attachment
+           (-> bytes? (or/c string? bytes?) (or/c string? bytes?) attachment?)]))
 
 (struct exn:fail:network:http:discord exn:fail (http-code discord-code reason) #:transparent)
+(struct attachment (data type name) #:transparent)
 
 (define (make-discord-http token)
-  (update-headers
-   (update-ssl
-    (update-host json-requester "discordapp.com")
-    #t)
-   (list (format "Authorization: ~a" token)
-         "User-Agent: DiscordBot (https://github.com/nitros12/racket-cord, 0.0)")))
-
-(struct attachment
-  (data
-   type
-   name))
-
-(define (generate-boundary)
-  (bytes-append
-   #"-------------------------"
-   (md5 (call-with-output-bytes
-         (lambda (out)
-           (display (current-inexact-milliseconds) out))))))
-
-(define (make-multipart requester . parts)
-  (let ([boundary (generate-boundary)])
-    (values
-     (bytes-append
-      #"--" boundary #"\r\n"
-      (bytes-join
-       parts
-       (bytes-append #"\r\n--" boundary #"\r\n"))
-      #"\r\n--" boundary #"--\r\n")
-     (update-headers
-      requester
-      (list (format "Content-Type: multipart/form-data; boundary=~a" boundary))))))
+  (make-keyword-procedure
+   (lambda (kws kwargs req uri #:headers [headers (hasheq)])
+     (keyword-apply req kws kwargs
+                    (list (string-append "https://discordapp.com" uri))
+                    #:headers (hash-set*
+                               headers
+                               'authorization token
+                               'content-type "application/json"
+                               'user-agent "DiscordBot (https://github.com/nitros12/racket-cord, 0.0)")))))
 
 (struct http-client
   (requester
@@ -96,7 +70,7 @@
    (format-route method (string-join path-parts) channel-id guild-id webhook-id)
    channel-id guild-id webhook-id))
 
-(define (apply-route http-client route args data params)
+(define (apply-route http-client route args kws kwargs)
   (let ([method (route-method route)]
         [formatted (foldl (lambda (k s)
                             (string-replace s (format "{~a}" (car k)) (~a (cdr k))))
@@ -105,69 +79,91 @@
                                         (cons "guild-id" (route-guild-id route))
                                         (cons "webhook-id" (route-webhook-id route)))
                                   args))])
-    (log-discord-debug "applying route: ~a. Params: ~a. Data: ~a" formatted params data)
-    (method (http-client-requester http-client) formatted
-            #:params (map (lambda (i) (cons (car i) (~a (cdr i)))) params) ; stringify param data
-            #:data data)))
+    (log-discord-debug "applying route: ~a. ~a" formatted (map cons kws kwargs))
+    (keyword-apply (http-client-requester http-client) kws kwargs method formatted '())))
 
 (define gateway-params "/?v=6&encoding=json")
 
 (define (get-ws-url http-client)
-  (string->url (string-append (dict-ref (json-response-body (get (http-client-requester http-client) (discord-url "gateway"))) 'url)
-                             gateway-params)))
-
+  (let ([resp ((http-client-requester http-client)
+               get
+               (discord-url "gateway"))])
+    (match resp 
+      [(response #:status-code 200)
+       (string->url (string-append (hash-ref (response-json resp) 'url) gateway-params))]
+      [(response #:status-code code #:body body)
+       (error (~a "http error\n"
+                  "  response: " (bytes->string/utf-8 body)))])))
 
 (define (get-ws-url-bot http-client)
-  (let ([resp (json-response-body (get (http-client-requester http-client) (discord-url "gateway" "bot")))])
-    (values (string->url (string-append (hash-ref resp 'url) gateway-params))
-            (hash-ref resp 'shards))))
+  (let* ([resp ((http-client-requester http-client)
+                get
+                (discord-url "gateway" "bot"))]
+         [resp-json (response-json resp)])
+    (match resp 
+      [(response #:status-code 200)
+       (values (string->url (string-append (hash-ref resp-json 'url) gateway-params))
+               (hash-ref resp-json 'shards))]
+      [(response #:status-code code #:body body)
+       (error (~a "http error\n"
+                  "  response: " (bytes->string/utf-8 body)))])))
 
 (define (discord-url . parts)
-  (format "/api/v6/~a" (string-join parts "/")))
+  (format "/api/v8/~a" (string-join parts "/")))
 
 (define (rfc2822->unix-seconds s)
   (time-second (date->time-utc (string->date s "~a, ~d ~b ~Y ~H:~M:~S"))))
 
-(define (run-route route http-client [args null] #:data [data #f] #:params [params null])
-  (let ([route-key (route-bucket-key route)]
-        [global-lock (http-client-global-lock http-client)]
-        [ratelimits (http-client-ratelimits http-client)])
-    (semaphore-wait global-lock)
-    (semaphore-post global-lock)
-    (let ([lock (hash-ref! ratelimits route-key (thunk (make-semaphore 1)))])
-      (call-with-semaphore
-       lock
-       (thunk
-        (let retry ([tries 5])
-          (when (tries . <= . 0)
-            (error 'run-route "Ran out of attempts on route: ~a" route-key))
-          (with-handlers ([exn:fail:network:http:error?
-                           (lambda (e)
-                             (match e [(exn:fail:network:http:error _ _ code type headers body)
-                                       (case code
-                                         [(502) (sleep (* 2 (6 . - . tries))) (retry (sub1 tries))]
-                                         [(429) (let ([retry-after ((string->number (car (hash-ref headers 'Retry-After))) . / . 1000)]
-                                                      [globally (hash-ref body 'global #f)])
-                                                  (log-discord-info "Hit 429 ratelimit ~a retrying in ~a seconds" route-key retry-after)
-                                                  (if globally
-                                                      (call-with-semaphore global-lock (thunk (sleep retry-after)))
-                                                      (sleep retry-after)))
-                                                (retry (sub1 tries))]
-                                         [else (raise (exn:fail:network:http:discord (format "Discord gave us an error: ~a" body)
-                                                                                     (current-continuation-marks) code
-                                                                                     (hash-ref body 'code null)
-                                                                                     (hash-ref body 'message null)))])]))])
-            (let* ([resp (apply-route http-client route args data params)]
-                   [resp-headers (json-response-headers resp)]
-                   [remaining (string->number (car (hash-ref resp-headers 'X-Ratelimit-Remaining '("0"))))]
-                   [reset (string->number (car (hash-ref resp-headers 'X-Ratelimit-Reset '("0"))))]
-                   [date (rfc2822->unix-seconds (car (hash-ref resp-headers 'Date)))])
-              (when (remaining . <= . 0)
-                (let ([delta (max 0 (reset . - . date))])
-                  (log-discord-info "Sleeping on ratelimit ~a for ~a seconds" route-key delta)
-                  (sleep delta)))
-              (json-response-body resp)))))))))
-
+(define run-route
+  (make-keyword-procedure
+   (lambda (kws kwargs route http-client [args null])
+     (let ([route-key (route-bucket-key route)]
+           [global-lock (http-client-global-lock http-client)]
+           [ratelimits (http-client-ratelimits http-client)])
+       (semaphore-wait global-lock)
+       (semaphore-post global-lock)
+       (let ([lock (hash-ref! ratelimits route-key (thunk (make-semaphore 1)))])
+         (call-with-semaphore
+          lock
+          (thunk
+           (let retry ([tries 5])
+             (when (tries . <= . 0)
+               (error 'run-route "Ran out of attempts on route: ~a" route-key))
+             (let ([resp (apply-route http-client route args kws kwargs)])
+               (match resp
+                 [(response #:status-code 502)
+                  (sleep (* 2 (- 6 tries)))
+                  (retry (sub1 tries))]
+                 [(response #:body body
+                            #:headers ([Retry-After retry])
+                            #:status-code 429)
+                  (let ([retry-after (/ (string->number retry) 1000)]
+                        [globally (hash-ref (response-json resp) 'global #f)])
+                    (log-discord-info "Hit 429 ratelimit ~a retrying in ~a seconds" route-key retry-after)
+                    (if globally
+                        (call-with-semaphore global-lock (thunk (sleep retry-after)))
+                        (sleep retry-after)))]
+                 [(response #:body body
+                            #:status-code code)
+                  #:when (>= code 400)
+                  (let ([json (response-json resp)])
+                    (raise (exn:fail:network:http:discord
+                            (format "Discord gave us an error: ~a" body)
+                            (current-continuation-marks) code
+                            (hash-ref json 'code null)
+                            (hash-ref json 'message null))))]
+                 [_
+                  (let* ([remaining ((compose string->number bytes->string/utf-8)
+                                     (or (response-headers-ref resp 'X-Ratelimit-Remaining) #"0"))]
+                         [reset ((compose string->number bytes->string/utf-8)
+                                 (or (response-headers-ref resp 'X-Ratelimit-Reset) #"0"))]
+                         [date ((compose rfc2822->unix-seconds bytes->string/utf-8)
+                                (response-headers-ref resp 'Date))])
+                    (when (remaining . <= . 0)
+                      (let ([delta (max 0 (reset . - . date))])
+                        (log-discord-info "Sleeping on ratelimit ~a for ~a seconds" route-key delta)
+                        (sleep delta)))
+                    (response-json resp))]))))))))))
 
 ;; CHANNEL ENDPOINTS
 
@@ -179,7 +175,7 @@
 (define (modify-channel client channel-id data)
   (hash->channel (run-route (make-route patch "channels" "{channel-id}"
                                        #:channel-id channel-id)
-                           (client-http-client client) #:data (jsexpr->string data))))
+                           (client-http-client client) #:data (json-payload data))))
 
 (define (delete-channel client channel-id)
   (run-route (make-route delete "channels" "{channel-id}"
@@ -198,7 +194,8 @@
                              #:channel-id channel-id)
                  (client-http-client client) `((message-id . ,message-id)))))
 
-(define (create-message client channel-id content
+(define (create-message client channel-id
+                        [content ""]
                         #:embed [embed null]
                         #:tts [tts #f]
                         #:file [attachment #f])
@@ -207,33 +204,17 @@
       (hash-set! data 'embed embed))
     (hash-set! data 'tts tts)
     (hash-set! data 'content content)
-    (let*-values
-        ([(requester) (http-client-requester (client-http-client client))]
-         [(data requester)
-          (if attachment
-              (make-multipart
-               requester
-               (bytes-append
-                (string->bytes/utf-8
-                 (format
-                  (string-append
-                   "Content-Disposition: form-data; name=\"file\"; filename=~s\r\n"
-                   "Content-Type: ~a\r\n\r\n")
-                  (attachment-name attachment)
-                  (attachment-type attachment)))
-                (attachment-data attachment))
-               (string->bytes/utf-8
-                (string-append
-                 "Content-Disposition: form-data; name=\"payload_json\"\r\n"
-                 "Content-Type: application/json\r\n\r\n"
-                 (jsexpr->string data))))
-              (values
-               (jsexpr->string data)
-               requester))])
-      (hash->message (run-route (make-route post "channels" "{channel-id}" "messages" #:channel-id channel-id)
-                                (struct-copy http-client (client-http-client client)
-                                             [requester requester])
-                                #:data data)))))
+    (hash->message (run-route (make-route post "channels" "{channel-id}" "messages" #:channel-id channel-id)
+                              (client-http-client client)
+                              #:data
+                              (if attachment
+                                  (multipart-payload
+                                   (file-part "file"
+                                              (open-input-bytes (attachment-data attachment))
+                                              (attachment-name attachment)
+                                              (attachment-type attachment))
+                                   (field-part "payload_json" (jsexpr->string data) #"application/json"))
+                                  (json-payload data))))))
 
 (define (edit-message client channel-id message-id #:content [content null] #:embed [embed null])
   (hash->message (run-route (make-route patch "channels" "{channel-id}" "messages" "{message-id}"
@@ -277,13 +258,13 @@
 (define (bulk-delete-messages client channel-id . ids)
   (run-route (make-route post "channels" "{channel-id}" "messages" "bulk-delete"
                          #:channel-id channel-id)
-             (client-http-client client) #:data (jsexpr->string (hash 'messages ids))))
+             (client-http-client client) #:data (json-payload (hash 'messages ids))))
 
 (define (edit-channel-permissions client channel-id overwrite-id allow deny type)
   (run-route (make-route put "channels" "{channel-id}" "permissions" "{overwrite-id}"
                          #:channel-id channel-id)
              (client-http-client client) `((overwrite-id . ,overwrite-id))
-             #:data (jsexpr->string
+             #:data (json-payload
                      (hash 'allow allow
                            'deny deny
                            'type type))))
@@ -297,7 +278,7 @@
   (hash->invite
    (run-route (make-route post "channels" "{channel-id}" "invites"
                           #:channel-id channel-id)
-              (client-http-client client) #:data (jsexpr->string
+              (client-http-client client) #:data (json-payload
                                                   (hash 'max_age age
                                                         'max_uses uses
                                                         'temporary temporary
@@ -333,8 +314,9 @@
   (run-route (make-route put "channels" "{channel-id}" "recipients" "{user-id}"
                          #:channel-id channel-id)
              (client-http-client client) `((user-id . ,user-id))
-             #:data (jsexpr->string (hash 'access_token access-token
-                                         'nick nick))))
+             #:data (json-payload
+                     (hash 'access_token access-token
+                           'nick nick))))
 
 (define (group-dm-remove-recipient client channel-id user-id)
   (run-route (make-route delete "channels" "{channel-id}" "recipients" "{user-id}"
@@ -361,7 +343,7 @@
   (hash->emoji
    (run-route (make-route post "guilds" "{guild-id}" "emojis"
                           #:guild-id guild-id)
-              (client-http-client client) #:data (jsexpr->string
+              (client-http-client client) #:data (json-payload
                                                   (hash 'name name
                                                         'image (image-data->base64 image-type image)
                                                         'roles roles)))))
@@ -371,7 +353,7 @@
    (run-route (make-route patch "guilds" "{guild-id}" "emojis" "{emoji-id}"
                           #:guild-id guild-id)
               (client-http-client client) `((emoji-id . ,emoji-id))
-              #:data (jsexpr->string
+              #:data (json-payload
                       (hash 'name name
                             'roles roles)))))
 
@@ -393,7 +375,7 @@
   (hash->guild
    (run-route (make-route patch "guilds" "{guild-id}"
                           #:guild-id guild-id)
-              (client-http-client client) #:data (jsexpr->string data))))
+              (client-http-client client) #:data (json-payload data))))
 
 (define (delete-guild client guild-id)
   (run-route (make-route delete "guilds" "{guild-id}"
@@ -410,12 +392,12 @@
   (hash->channel (run-route
                  (make-route post "guilds" "{guild-id}" "channnels"
                              #:guild-id guild-id)
-                 (client-http-client client) #:data (jsexpr->string data))))
+                 (client-http-client client) #:data (json-payload data))))
 
 (define (modify-guild-channel-permissions client guild-id data)
   (run-route (make-route patch "guilds" "{guild-id}" "channels"
                          #:guild-id guild-id)
-             (client-http-client client) #:data (jsexpr->string data)))
+             (client-http-client client) #:data (json-payload data)))
 
 (define (get-guild-member client guild-id user-id)
   (hash->member (run-route
@@ -435,18 +417,18 @@
                 (make-route put "guilds" "{guild-id}" "members" "{user-id}"
                             #:guild-id guild-id)
                 (client-http-client client) `((user-id . ,user-id))
-                #:data (jsexpr->string data))))
+                #:data (json-payload data))))
 
 (define (modify-guild-member client guild-id user-id data)
   (run-route (make-route patch "guilds" "{guild-id}" "members" "{guild-id}"
                          #:guild-id guild-id)
              (client-http-client client) `((user-id . ,user-id))
-             #:data (jsexpr->string data)))
+             #:data (json-payload data)))
 
 (define (modify-user-nick client guild-id nick)
   (run-route (make-route patch "guilds" "{guild-id}" "members" "@me" "nick"
                          #:guild-id guild-id)
-             (client-http-client client) #:data (jsexpr->string (hash 'nick nick))))
+             (client-http-client client) #:data (json-payload (hash 'nick nick))))
 
 (define (add-guild-member-role client guild-id user-id role-id)
   (run-route (make-route put "guilds" "{guild-id}" "members" "{user-id}" "roles" "{role-id}"
@@ -485,23 +467,22 @@
                             (client-http-client client))))
 
 (define (create-guild-role client guild-id data)
-  (hash->role (run-route
-              (make-route post "guilds" "{guild-id}" "roles"
-                          #:guild-id guild-id)
-              (client-http-client client) (jsexpr->string data))))
+  (hash->role (run-route (make-route post "guilds" "{guild-id}" "roles"
+                                     #:guild-id guild-id)
+                         (client-http-client client) #:data (json-payload data))))
 
 (define (modify-guild-role-positions client guild-id data)
   (map hash->role
        (run-route (make-route patch "guilds" "{guild-id}" "roles"
                               #:guild-id guild-id)
-                  (client-http-client client) #:data (jsexpr->string data))))
+                  (client-http-client client) #:data (json-payload data))))
 
 (define (modify-guild-role client guild-id role-id data)
   (hash->role (run-route
               (make-route patch "guilds" "{guild-id}" "roles" "{role-id}"
                           #:guild-id guild-id)
               (client-http-client client) `((role-id . ,role-id))
-              #:data (jsexpr->string data))))
+              #:data (json-payload data))))
 
 (define (delete-guild-role client guild-id role-id)
   (run-route (make-route delete "guilds" "{guild-id}" "roles" "{guild-id}"
@@ -538,14 +519,14 @@
 (define (create-guild-integration client guild-id type id)
   (run-route (make-route post "guilds" "{guild-id}" "integrations"
                          #:guild-id guild-id)
-             (client-http-client client) #:data (jsexpr->string
+             (client-http-client client) #:data (json-payload
                                                  (hash 'type type 'id id))))
 
 (define (modify-guild-integration client guild-id integration-id data)
   (run-route (make-route patch "guilds" "{guild-id}" "integrations" "{integration-id}"
                          #:guild-id guild-id)
              (client-http-client client) `((integration-id . ,integration-id))
-             #:data (jsexpr->string data)))
+             #:data (json-payload data)))
 
 (define (delete-guild-integrations client guild-id integration-id)
   (run-route (make-route delete "guilds" "{guild-id}" "integrations" "{integration-id}"
@@ -565,7 +546,7 @@
 (define (modify-guild-embed client guild-id data)
   (run-route (make-route patch "guilds" "{guild-id}" "embed"
                          #:guild-id guild-id)
-             (client-http-client client) #:data (jsexpr->string data)))
+             (client-http-client client) #:data (json-payload data)))
 
 ;; USER ENDPOINTS
 
@@ -580,7 +561,7 @@
 (define (modify-current-user client #:username [username null] #:avatar [avatar null] #:avatar-type [avatar-type ""])
   (hash->user (run-route (make-route patch "users" "@me")
                         (client-http-client client)
-                        #:data (jsexpr->string (hash-exclude-null
+                        #:data (json-payload (hash-exclude-null
                                                'username username
                                                'avatar (if (null? avatar) null (image-data->base64 avatar-type avatar)))))))
 
@@ -610,13 +591,13 @@
   (hash->channel (run-route
                  (make-route post "users" "@me" "channels")
                  (client-http-client client)
-                 #:data (jsexpr->string (hash 'recipient_id recipient-id)))))
+                 #:data (json-payload (hash 'recipient_id recipient-id)))))
 
 (define (create-group-dm client data)
   (hash->channel (run-route
                  (make-route post "users" "@me" "channels")
                  (client-http-client client)
-                 #:data (jsexpr->string data))))
+                 #:data (json-payload data))))
 
 ;; WEBHOOK ENDPOINTS
 
@@ -625,7 +606,7 @@
                  (make-route post "channels" "{channel-id}" "webhooks"
                              #:channel-id channel-id)
                  (client-http-client client)
-                 #:data (jsexpr->string (hash
+                 #:data (json-payload (hash
                                         'name name
                                         'avatar (image-data->base64 avatar-type avatar))))))
 
@@ -662,7 +643,7 @@
                   (make-route patch "webhooks" "{webhook-id}"
                               #:webhook-id webhook-id)
                   (client-http-client client)
-                  #:data (jsexpr->string (hash-exclude-null
+                  #:data (json-payload (hash-exclude-null
                                           'name name
                                           'avatar (if (null? avatar) null (image-data->base64 avatar-type avatar))
                                           'channel_id channel-id)))))
@@ -676,7 +657,7 @@
                   (make-route patch "webhooks" "{webhook-id}"
                               #:webhook-id webhook-id)
                   (client-http-client client)
-                  #:data (jsexpr->string (hash-exclude-null
+                  #:data (json-payload (hash-exclude-null
                                           'name name
                                           'avatar (if (null? avatar) null (image-data->base64 avatar-type avatar))
                                           'channel_id channel-id)))))
@@ -695,4 +676,4 @@
                          #:webhook-id webhook-id)
              (client-http-client client)
              #:params `((wait . ,wait))
-             #:data (jsexpr->string data)))
+             #:data (json-payload data)))

@@ -378,9 +378,10 @@ Request a channel.
                                    [message-id string?]) message?]
 
 @defproc[(http:create-message [client client?]
-                              [content string?]
+                              [content string? ""]
                               [#:embed embed jsexpr? null]
-                              [#:tts tts boolean? #f]) message?]
+                              [#:tts tts boolean? #f]
+                              [#:file file attachment? #f]) message?]
 
 @defproc[(http:edit-message [client client?]
                             [channel-id string?]

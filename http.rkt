@@ -2,7 +2,6 @@
 
 (require net/http-easy
          json
-         file/md5
          net/url
          racket/string
          srfi/19

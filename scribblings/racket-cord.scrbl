@@ -1,4 +1,5 @@
 #lang scribble/manual
+@require[scribble/extract]
 @require[@for-label[racket-cord
                     json
                     net/rfc6455]
@@ -46,43 +47,10 @@ Example usage of the library:
 
 @section{Client}
 
-@defproc[(make-client [token string?]
-                      [#:token-type token-type symbol? 'bot]
-                      [#:auto-shard auto-shard boolean? #f]
-                      [#:shard-count shard-count integer? 1]) client?]{
-Makes a discord client with the passed token.
-
-@racket[token]: The token to use.
-
-@racket[#:token-type]: The type of token, either @racket['bot], @racket['bearer] or @racket['client].
-
-@racket[#:auto-shard]: Whether to request the number of shards from discord, only usable for bot clients.
-
-@racket[#:shard-count]: If auto-shard is not passed, the number of shards to connect will be such.}
-
-
-@defproc[(start-client [client client?]) void?]{
-Start a client. WS is connected and the client begins handling events.
-
-This function blocks until the client is disconnected through @racket[stop-client].
-}
-
-@defproc[(strart-client-no-wait [client client?]) void?]{
-Same as @racket[start-client] but does not block the calling thread.
-}
-
-@defproc[(stop-client [client client?]) void?]{
-Stops a client.
-}
-
-@defproc[(update-status [client client?]
-                        [guild-id integer?]
-                        [#:since since integer? null]
-                        [#:game game game? null]
-                        [#:status status string? "online"]
-                        [#:afk afk boolean? #f]) void?]{
-Updates the status of a client.
-}
+@include-previously-extracted["extracted.scrbl" "make-client"]
+@include-previously-extracted["extracted.scrbl" "start-client"]
+@include-previously-extracted["extracted.scrbl" "stop-client"]
+@include-previously-extracted["extracted.scrbl" "update-status"]
 
 @defproc[(on-event [evt symbol?]
                    [client client?]

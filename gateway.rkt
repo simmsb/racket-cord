@@ -100,7 +100,7 @@
                                    (hasheq
                                     'op op-status-update
                                     'd (hasheq
-                                        'since since
+                                        'since (if (not since) (json-null) since)
                                         'game (game->hash game)
                                         'status status
                                         'afk afk)))))

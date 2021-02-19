@@ -1,14 +1,14 @@
 # racket-cord
 
-A library for interfacing with discord using racket.
+A library for interfacing with Discord using racket.
 
-[![Build Status](https://travis-ci.org/nitros12/racket-cord.svg?branch=master)](https://travis-ci.org/nitros12/racket-cord)
+[![Build Status](https://github.com/nitros12/racket-cord/actions/workflows/ci.yml/badge.svg)](https://github.com/nitros12/racket-cord/actions/workflows/ci.yml)
 
 [Racket package](https://pkgd.racket-lang.org/pkgn/package/racket-cord)
 
 [Docs](https://docs.racket-lang.org/racket-cord/index.html)
 
-# example
+# Example
 
 ```racket
 #lang racket
@@ -17,7 +17,8 @@ A library for interfacing with discord using racket.
 
 (define bot-token (getenv "BOT_TOKEN"))
 
-(define myclient (make-client bot-token #:auto-shard #t))
+(define myclient (make-client bot-token #:intents '(intent-guilds intent-guild-messages)
+                                        #:auto-shard #t))
 
 (on-event
  'message-create myclient

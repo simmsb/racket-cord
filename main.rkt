@@ -1,6 +1,7 @@
 #lang racket
 
 (require json
+         "constants.rkt"
          "data.rkt"
          "events.rkt"
          "gateway.rkt"
@@ -13,6 +14,7 @@
          stop-client
          on-event
          update-status
+         (all-from-out "constants.rkt")
          (all-from-out "utils.rkt")
          (all-from-out "http.rkt")
          (struct-out game)
@@ -34,11 +36,12 @@
     [else (raise-user-error 'format-token "~a is not a valid token type" type)]))
 
 (define (make-client token
+                     #:intents [intents null]
                      #:token-type [token-type 'bot]
                      #:auto-shard [auto-shard #f]
                      #:shard-count [shard-count 1])
   (let* ([fmt-token (format-token token token-type)]
-         [client (new-client fmt-token)])
+         [client (new-client fmt-token intents)])
     (let-values ([(ws-url shards)
                   (if auto-shard
                       (http:get-ws-url-bot (client-http-client client))
@@ -48,7 +51,7 @@
                                       (range shards))))
     client))
 
-(define (new-client token)
+(define (new-client token intents)
   (let ([clnt
          (client
           null
@@ -58,6 +61,7 @@
           (make-hash)
           (http:make-http-client token)
           token
+          intents
           (make-semaphore 0))])
     (add-events clnt)
     clnt))

@@ -58,7 +58,7 @@
 (define (accept-hello client data)
   (set-ws-client-heartbeat-thread! client (heartbeater client (/ (hash-ref data 'heartbeat_interval) 1000))))
 
-(define (make-identify token shard presence)
+(define (make-identify token shard presence intents)
   (jsexpr->string
    (hasheq
     'op op-identifiy
@@ -70,7 +70,8 @@
                      '$device "racket-cord")
         'compress #f
         'large_threshold 50
-        'v 6
+        'v 8
+        'intents (foldl bitwise-ior 0 intents)
         'shard shard
         'presence presence))))
 
@@ -109,7 +110,8 @@
   (ws-send! (ws-client-ws client) (make-identify (ws-client-token client)
                                                  (list (ws-client-shard-id client)
                                                        (length (client-shards (ws-client-client client))))
-                                                 presence)))
+                                                 presence
+                                                 (client-intents (ws-client-client client)))))
 
 (define (send-resume client)
   (log-discord-debug "RESUMING")

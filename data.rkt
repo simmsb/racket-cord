@@ -40,6 +40,7 @@
    events
    http-client
    token
+   intents
    running)
   #:mutable
   #:transparent)

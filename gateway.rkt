@@ -3,7 +3,6 @@
 (require net/rfc6455
          racket/hash
          json
-         simple-http
          (only-in "http.rkt"
                   get-ws-url)
          "data.rkt"

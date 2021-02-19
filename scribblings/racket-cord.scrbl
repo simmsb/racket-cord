@@ -1,8 +1,7 @@
 #lang scribble/manual
 @require[@for-label[racket-cord
                     json
-                    net/rfc6455
-                    simple-http]
+                    net/rfc6455]
                    @for-label[@except-in[racket/base member]]]
 
 @title{racket-cord: Racket discord library}

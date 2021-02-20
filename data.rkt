@@ -369,57 +369,13 @@
 ; TODO(williewillus) all of these updaters need to be completely redone
 
 (define (update-guild old-guild data)
-  (struct-copy guild old-guild
-               [name (hash-ref data 'name (guild-name old-guild))]
-               [icon (hash-ref data 'icon (guild-icon old-guild))]
-               [splash (hash-ref data 'splash (guild-splash old-guild))]
-               [owner-id (hash-ref data 'owner_id (guild-owner-id old-guild))]
-               [region (hash-ref data 'region (guild-region old-guild))]
-               [afk-channel-id (hash-ref data 'afk_channel_id (guild-afk-channel-id old-guild))]
-               [afk-timeout (hash-ref data 'afk_timeout (guild-afk-timeout old-guild))]
-               [embed-enabled (hash-ref data 'embed_enabled (guild-embed-enabled old-guild))]
-               [embed-channel-id (hash-ref data 'embed_channel_id (guild-embed-channel-id old-guild))]
-               [verification-level (hash-ref data 'verification_level (guild-verification-level old-guild))]
-               [default-message-notifications (hash-ref data 'default_message_notifications (guild-default-message-notifications old-guild))]
-               [explicit-content-filter (hash-ref data 'explicit-content-filter (guild-explicit-content-filter old-guild))]))
+  old-guild)
 
 (define (update-channel old-channel data)
-  (case (hash-ref data 'type)
-    [(0 2 4)
-     (struct-copy guild-channel old-channel
-                  [position (hash-ref data 'position (guild-channel-position old-channel))]
-                  [permission-overwrites (hash-ref data 'permission_overwrites (guild-channel-permission-overwrites old-channel))]
-                  [name (hash-ref data 'name (guild-channel-name old-channel))]
-                  [topic (hash-ref data 'topic (guild-channel-topic old-channel))]
-                  [nsfw (hash-ref data 'nsfw (guild-channel-nsfw old-channel))]
-                  [last-message-id (hash-ref data 'last_message_id (guild-channel-last-message-id old-channel))]
-                  [bitrate (hash-ref data 'bitrate (guild-channel-bitrate old-channel))]
-                  [user-limit (hash-ref data 'user_limit (guild-channel-user-limit old-channel))]
-                  [parent-id (hash-ref data 'parent_id (guild-channel-parent-id old-channel))])]
-    [(1 3)
-     (struct-copy dm-channel old-channel
-                  [name (hash-ref data 'name (dm-channel-name old-channel))]
-                  [last-message-id (hash-ref data 'last_message_id (dm-channel-last-message-id old-channel))]
-                  [recipients (if (hash-has-key? data 'recipients)
-                                  (extract-and-parse data 'recipients hash->user)
-                                  (dm-channel-recipients old-channel))]
-                  [icon (hash-ref data 'icon (dm-channel-icon old-channel))])]))
+  old-channel)
 
 (define (update-user old-user data)
-  (struct-copy user old-user
-               [username (hash-ref data 'username (user-username old-user))]
-               [discriminator (hash-ref data 'discriminator (user-discriminator old-user))]
-               [avatar (hash-ref data 'avatar (user-avatar old-user))]
-               [mfa-enabled (hash-ref data 'mfa_enabled (user-mfa-enabled old-user))]
-               [locale (hash-ref data 'locale (user-locale old-user))]
-               [verified (hash-ref data 'verified (user-verified old-user))]
-               [email (hash-ref data 'email (user-email old-user))]
-               [flags (hash-ref data 'flags (user-flags old-user))]
-               [premium-type (hash-ref data 'premium_type (user-premium-type old-user))]
-               [public-flags (hash-ref data 'public_flags (user-public-flags old-user))]))
+  old-user)
 
 (define (update-member old-member data)
-  (struct-copy member old-member
-               [user (update-user (member-user old-member) (hash-ref data 'user))]
-               [roles (hash-ref data 'roles 'null)]
-               [nick (hash-ref data 'nick (member-nick old-member))]))
+  old-member)

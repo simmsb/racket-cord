@@ -94,7 +94,7 @@
 (struct/contract emoji
   ([id (or/c string? #f)]
    [name (or/c string? #f)]
-   [roles (listof integer?)]
+   [roles (listof string?)]
    [user (or/c user? #f)]
    [require-colons boolean?]
    [managed boolean?]
@@ -395,13 +395,25 @@
 (struct/contract invite
   ([code string?]
    [guild (or/c guild? #f)]
-   [channel any/c] ; dispatch between guild/dm channel
+   [channel any/c] ; TODO dispatch between guild/dm channel
    [inviter (or/c user? #f)]
    [target-user (or/c user? #f)]
    [target-user-type (or/c integer? #f)]
    [approximate-presence-count (or/c integer? #f)]
    [approximate-member-count (or/c integer? #f)])
   #:transparent)
+
+(define (hash->invite data)
+  (and data
+       (invite
+        (hash-ref data 'code)
+        #f ;TODO fix guild(hash->guild (hash-ref data 'guild #f))
+        (hash-ref data 'channel)
+        (hash->user (hash-ref data 'inviter #f))
+        (hash->user (hash-ref data 'target_user #f))
+        (hash-ref data 'target_user_type #f)
+        (hash-ref data 'approximate_presence_count #f)
+        (hash-ref data 'approximate_member_count #f))))
 
 (struct/contract
  webhook
@@ -508,12 +520,6 @@
    'type (game-type game)
    'url (game-url game)))
 
-(define (hash->invite data)
-  (invite
-   (hash-ref data 'code)
-   (hash-ref (hash-ref data 'guild) 'id)
-   (hash-ref (hash-ref data 'channel) 'id)))
-
 ; TODO(williewillus) all of these updaters need to be completely redone
 
 (define (update-guild old-guild data)
@@ -556,10 +562,38 @@
     (test-not-exn
      "Normal webhook"
      (thunk (hash->webhook (string->jsexpr webhook-example))))))
+
+  (make-test-suite
+   "Emoji deserialization"
+   (list
+    (test-not-exn
+     "Normal emoji"
+     (thunk (hash->emoji (string->jsexpr emoji-example))))
+    (test-not-exn
+     "Gateway standard emoji"
+     (thunk (hash->emoji (string->jsexpr emoji-gateway-standard-example))))
+    (test-not-exn
+     "Gateway custom emoji"
+     (thunk
+      (hash->emoji (string->jsexpr emoji-gateway-custom-example))
+      (hash->emoji (string->jsexpr emoji-gateway-custom-example-2))))))
+
+  (make-test-suite
+   "Invite deserialization"
+   (list
+    (test-not-exn
+     "Normal invite"
+     (thunk (hash->invite (string->jsexpr invite-example))))))
+
+  (make-test-suite
+   "Role deserialization"
+   (list
+    (test-not-exn
+     "Normal role"
+     (thunk (hash->role (string->jsexpr role-example))))))
   
   (make-test-suite
    "Message deserialization"
-
    (list 
     (test-not-exn
      "Normal message"

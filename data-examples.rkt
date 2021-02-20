@@ -53,6 +53,105 @@ END
 END
   )
 
+(define emoji-example
+  #<<END
+{
+  "id": "41771983429993937",
+  "name": "LUL",
+  "roles": ["41771983429993000", "41771983429993111"],
+  "user": {
+    "username": "Luigi",
+    "discriminator": "0002",
+    "id": "96008815106887111",
+    "avatar": "5500909a3274e1812beb4e8de6631111"
+  },
+  "require_colons": true,
+  "managed": false,
+  "animated": false
+}
+END
+  )
+
+(define emoji-gateway-standard-example
+  #<<END
+{
+  "id": null,
+  "name": "🔥"
+}
+END
+  )
+
+(define emoji-gateway-custom-example
+  #<<END
+{
+  "id": "41771983429993937",
+  "name": "LUL",
+  "animated": true
+}
+END
+  )
+
+(define emoji-gateway-custom-example-2
+  #<<END
+{
+  "id": "41771983429993937",
+  "name": null
+}
+END
+  )
+
+(define role-example
+  #<<END
+{
+  "id": "41771983423143936",
+  "name": "WE DEM BOYZZ!!!!!!",
+  "color": 3447003,
+  "hoist": true,
+  "position": 1,
+  "permissions": "66321471",
+  "managed": false,
+  "mentionable": false
+}
+END
+  )
+
+(define invite-example
+  #<<END
+{
+  "code": "0vCdhLbwjZZTWZLD",
+  "guild": {
+    "id": "165176875973476352",
+    "name": "CS:GO Fraggers Only",
+    "splash": null,
+    "banner": null,
+    "description": "Very good description",
+    "icon": null,
+    "features": ["NEWS", "DISCOVERABLE"],
+    "verification_level": 2,
+    "vanity_url_code": null
+  },
+  "channel": {
+    "id": "165176875973476352",
+    "name": "illuminati",
+    "type": 0
+  },
+  "inviter": {
+    "id": "115590097100865541",
+    "username": "speed",
+    "avatar": "deadbeef",
+    "discriminator": "7653"
+  },
+  "target_user": {
+    "id": "165176875973476352",
+    "username": "bob",
+    "avatar": "deadbeef",
+    "discriminator": "1234"
+  },
+  "target_user_type": 1
+}
+END
+  )
+
 (define message-example
   #<<END
 {

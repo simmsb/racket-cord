@@ -74,14 +74,14 @@
         [formatted (foldl (lambda (k s)
                             (string-replace s (format "{~a}" (car k)) (~a (cdr k))))
                           (route-path route)
-                          (append (list (cons "channel-id" (route-channel-id route))
-                                        (cons "guild-id" (route-guild-id route))
-                                        (cons "webhook-id" (route-webhook-id route)))
+                          (append (list ("channel-id" . (route-channel-id route))
+                                        ("guild-id"   . (route-guild-id route))
+                                        ("webhook-id" . (route-webhook-id route)))
                                   args))])
     (log-discord-debug "applying route: ~a. ~a" formatted (map cons kws kwargs))
     (keyword-apply (http-client-requester http-client) kws kwargs method formatted '())))
 
-(define gateway-params "/?v=6&encoding=json")
+(define gateway-params "/?v=8&encoding=json")
 
 (define (get-ws-url http-client)
   (let ([resp ((http-client-requester http-client)
@@ -126,7 +126,7 @@
           lock
           (thunk
            (let retry ([tries 5])
-             (when (tries . <= . 0)
+             (when (<= tries 0)
                (error 'run-route "Ran out of attempts on route: ~a" route-key))
              (let ([resp (apply-route http-client route args kws kwargs)])
                (match resp
@@ -158,8 +158,8 @@
                                  (or (response-headers-ref resp 'X-Ratelimit-Reset) #"0"))]
                          [date ((compose rfc2822->unix-seconds bytes->string/utf-8)
                                 (response-headers-ref resp 'Date))])
-                    (when (remaining . <= . 0)
-                      (let ([delta (max 0 (reset . - . date))])
+                    (when (<= remaining 0)
+                      (let ([delta (max 0 (- reset date))])
                         (log-discord-info "Sleeping on ratelimit ~a for ~a seconds" route-key delta)
                         (sleep delta)))
                     (response-json resp))]))))))))))

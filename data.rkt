@@ -403,15 +403,31 @@
    [approximate-member-count (or/c integer? #f)])
   #:transparent)
 
-(struct webhook
-  (id
-   guild-id
-   channel-id
-   user
-   name
-   avatar
-   token)
+(struct/contract
+ webhook
+ ([id string?]
+  [type integer?]
+  [guild-id (or/c string? #f)]
+  [channel-id string?]
+  [user (or/c user? #f)]
+  [name (or/c string? #f)]
+  [avatar (or/c string? #f)]
+  [token (or/c string? #f)]
+  [application-id (or/c string? #f)])
   #:transparent)
+
+(define (hash->webhook data)
+  (and data
+  (webhook
+   (hash-ref data 'id)
+   (hash-ref data 'type)
+   (hash-ref data 'guild_id #f)
+   (hash-ref data 'channel_id)
+   (hash->user (hash-ref data 'user #f))
+   (hash-ref data 'name #f)
+   (hash-ref data 'avatar #f)
+   (hash-ref data 'token #f)
+   (hash-ref data 'application_id #f))))
 
 (define ((get-id parser) data)
   (cons (hash-ref data 'id) (parser data)))
@@ -498,16 +514,6 @@
    (hash-ref (hash-ref data 'guild) 'id)
    (hash-ref (hash-ref data 'channel) 'id)))
 
-(define (hash->webhook data)
-  (webhook
-   (hash-ref data 'id)
-   (hash-ref data 'guild_id null)
-   (hash-ref data 'channel_id)
-   (bind hash->user (hash-ref data 'user null))
-   (hash-ref data 'name)
-   (hash-ref data 'avatar)
-   (hash-ref data 'token)))
-
 ; TODO(williewillus) all of these updaters need to be completely redone
 
 (define (update-guild old-guild data)
@@ -543,6 +549,13 @@
     (test-not-exn
      "Normal member"
      (thunk (hash->member (string->jsexpr member-example))))))
+
+  (make-test-suite
+   "Webhook deserialization"
+   (list
+    (test-not-exn
+     "Normal webhook"
+     (thunk (hash->webhook (string->jsexpr webhook-example))))))
   
   (make-test-suite
    "Message deserialization"

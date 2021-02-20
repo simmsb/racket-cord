@@ -19,3 +19,4 @@ jobs:
           version: ${{ matrix.racket-version }}
       - run: raco pkg install --deps search-auto
       - run: raco setup racket-cord
+      - run: raco test -t -p racket-cord

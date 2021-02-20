@@ -162,24 +162,35 @@
    type)
   #:transparent)
 
-(struct role
-  (id
-   name
-   color
-   hoist
-   position
-   permissions
-   managed
-   mentionable)
+(struct/contract discord-role-tags
+  ([bot-id (or/c integer? #f)]
+   [integration-id (or/c integer? #f)]
+   ; XXX premium_subscriber typed as "null" in docs,
+   ; typing as nonnull boolean for now (true if presence, false if absent)
+   [premium-subscriber boolean?]) 
   #:transparent)
 
-(struct emoji
-  (id
-   name
-   roles
-   user
-   require-colons
-   managed)
+(struct/contract role
+  ([id integer?]
+   [name string?]
+   [color integer?]
+   [hoist boolean?]
+   [position integer?]
+   [permissions string?]
+   [managed boolean?]
+   [mentionable boolean?]
+   [tags (or/c discord-role-tags? #f)])
+  #:transparent)
+
+(struct/contract emoji
+  ([id (or/c integer? #f)]
+   [name (or/c string? #f)]
+   [roles (listof integer?)]
+   [user (or/c user? #f)]
+   [require-colons (or/c boolean? 'null)]
+   [managed (or/c boolean? 'null)]
+   [animated (or/c boolean? 'null)]
+   [available (or/c boolean? 'null)])
   #:transparent)
 
 (struct game
@@ -188,10 +199,15 @@
    url)
   #:transparent)
 
-(struct invite
-  (code
-   guild-id
-   channel-id)
+(struct/contract invite
+  ([code string?]
+   [guild (or/c guild? #f)]
+   [channel any/c] ; dispatch between guild/dm channel
+   [inviter (or/c user? #f)]
+   [target-user (or/c user? #f)]
+   [target-user-type (or/c integer? #f)]
+   [approximate-presence-count (or/c integer? #f)]
+   [approximate-member-count (or/c integer? #f)])
   #:transparent)
 
 (struct webhook
@@ -290,7 +306,7 @@
 (define (hash->member data)
   (member
    (let ([u (hash-ref data 'user #f)])
-     (if u (hash->user u) #f))
+     (and u (hash->user u)))
    (hash-ref data 'nick #f)
    (hash-ref data 'roles)
    (hash-ref data 'joined_at)
@@ -318,6 +334,12 @@
    (hash-ref data 'pinned)
    (hash-ref data 'type)))
 
+(define (hash->role-tags data)
+  (discord-role-tags
+   (hash-ref data 'bot_id #f)
+   (hash-ref data 'integration_id #f)
+   (hash-ref data 'premium_subscriber #f))) ; typed as "null" in docs, so only check presence of key
+
 (define (hash->role data)
   (role
    (hash-ref data 'id)
@@ -327,16 +349,21 @@
    (hash-ref data 'position)
    (hash-ref data 'permissions)
    (hash-ref data 'managed)
-   (hash-ref data 'mentionable)))
+   (hash-ref data 'mentionable)
+   (let ([rt (hash-ref data 'tags #f)])
+     (and rt (hash->role-tags rt)))))
 
 (define (hash->emoji data)
   (emoji
-   (hash-ref data 'id)
-   (hash-ref data 'name)
-   (hash-ref data 'roles null)
-   (hash-ref data 'user null)
-   (hash-ref data 'require_colons)
-   (hash-ref data 'managed)))
+   (hash-ref data 'id #f)
+   (hash-ref data 'name #f)
+   (hash-ref data 'roles '())
+   (let ([ud (hash-ref data 'user #f)])
+     (and ud (hash->user ud)))
+   (hash-ref data 'require_colons 'null)
+   (hash-ref data 'managed 'null)
+   (hash-ref data 'animated 'null)
+   (hash-ref data 'available 'null)))
 
 (define (hash->game data)
   (game

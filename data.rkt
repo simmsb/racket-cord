@@ -132,15 +132,16 @@
    [public-flags (or/c integer? #f)])
   #:transparent)
 
-(struct member
-  (user
-   nick
-   roles
-   joined_at
-   deaf
-   mute
-   status
-   game)
+(struct/contract member
+  ([user (or/c user? #f)]
+   [nick (or/c string? #f)]
+   [roles (listof integer?)]
+   [joined-at string?]
+   [premium-since (or/c string? #f)]
+   [deaf boolean?]
+   [mute boolean?]
+   [pending (or/c boolean? 'null)]
+   [permissions (or/c string? #f)])
   #:transparent)
 
 (struct message
@@ -288,14 +289,16 @@
 
 (define (hash->member data)
   (member
-   (hash->user (hash-ref data 'user))
-   (hash-ref data 'nick null)
+   (let ([u (hash-ref data 'user #f)])
+     (if u (hash->user u) #f))
+   (hash-ref data 'nick #f)
    (hash-ref data 'roles)
    (hash-ref data 'joined_at)
-   (hash-ref data 'deaf null)
-   (hash-ref data 'mute null)
-   null
-   null))
+   (hash-ref data 'premium_since #f)
+   (hash-ref data 'deaf)
+   (hash-ref data 'mute)
+   (hash-ref data 'pending 'null)
+   (hash-ref data 'permissions 'null)))
 
 (define (hash->message data)
   (message
@@ -363,6 +366,8 @@
    (hash-ref data 'avatar)
    (hash-ref data 'token)))
 
+; TODO(williewillus) all of these updaters need to be completely redone
+
 (define (update-guild old-guild data)
   (struct-copy guild old-guild
                [name (hash-ref data 'name (guild-name old-guild))]
@@ -416,9 +421,5 @@
 (define (update-member old-member data)
   (struct-copy member old-member
                [user (update-user (member-user old-member) (hash-ref data 'user))]
-               [roles (hash-ref data 'roles null)]
-               [status (hash-ref data 'status (member-status old-member))]
-               [game (if (hash-has-key? data 'game)  ;; A bit messy
-                         (hash->game (hash-ref data 'game))
-                         (member-game old-member))]
+               [roles (hash-ref data 'roles 'null)]
                [nick (hash-ref data 'nick (member-nick old-member))]))

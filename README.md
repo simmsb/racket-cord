@@ -8,6 +8,15 @@ A library for interfacing with Discord using racket.
 
 [Docs](https://docs.racket-lang.org/racket-cord/index.html)
 
+# Design Notes
+## Representation of Null Values
+
+* In bindings of Discord data types, this library does not distinguish between entries
+omitted in responses from Discord, or entries with a `null` value.
+Both are converted to `#f`, as is standard Racket convention.
+* In the special case of a boolean field, such that `#f` has meaning, the value `'null` is instead used.
+* Note that cleanups and refactors are still in progress and this convention is not observed everywhere yet.
+
 # Example
 
 ```racket
@@ -17,7 +26,7 @@ A library for interfacing with Discord using racket.
 
 (define bot-token (getenv "BOT_TOKEN"))
 
-(define myclient (make-client bot-token #:intents '(intent-guilds intent-guild-messages)
+(define myclient (make-client bot-token #:intents (list intent-guilds intent-guild-messages)
                                         #:auto-shard #t))
 
 (on-event

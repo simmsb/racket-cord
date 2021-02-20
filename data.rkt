@@ -116,13 +116,20 @@
    application-id)
   #:transparent)
 
-(struct user
-  (id
-   username
-   discriminator
-   avatar
-   bot
-   mfa-enabled)
+(struct/contract user
+  ([id integer?]
+   [username string?]
+   [discriminator string?]
+   [avatar (or/c string? #f)]
+   [bot (or/c boolean? 'null)]
+   [system (or/c boolean? 'null)]
+   [mfa-enabled (or/c boolean? 'null)]
+   [locale (or/c string? #f)]
+   [verified (or/c boolean? 'null)]
+   [email (or/c string? #f)]
+   [flags (or/c integer? #f)]
+   [premium-type (or/c integer? #f)]
+   [public-flags (or/c integer? #f)])
   #:transparent)
 
 (struct member
@@ -267,10 +274,17 @@
   (user
    (hash-ref data 'id)
    (hash-ref data 'username)
-   (hash-ref data 'discriminator null)
-   (hash-ref data 'avatar null)
-   (hash-ref data 'bot null)
-   (hash-ref data 'mfa_enabled null)))
+   (hash-ref data 'discriminator)
+   (hash-ref data 'avatar #f)
+   (hash-ref data 'bot 'null)
+   (hash-ref data 'system 'null)
+   (hash-ref data 'mfa_enabled 'null)
+   (hash-ref data 'locale #f)
+   (hash-ref data 'verified 'null)
+   (hash-ref data 'email #f)
+   (hash-ref data 'flags #f)
+   (hash-ref data 'premium_type #f)
+   (hash-ref data 'public_flags #f)))
 
 (define (hash->member data)
   (member
@@ -390,7 +404,14 @@
   (struct-copy user old-user
                [username (hash-ref data 'username (user-username old-user))]
                [discriminator (hash-ref data 'discriminator (user-discriminator old-user))]
-               [avatar (hash-ref data 'avatar (user-avatar old-user))]))
+               [avatar (hash-ref data 'avatar (user-avatar old-user))]
+               [mfa-enabled (hash-ref data 'mfa_enabled (user-mfa-enabled old-user))]
+               [locale (hash-ref data 'locale (user-locale old-user))]
+               [verified (hash-ref data 'verified (user-verified old-user))]
+               [email (hash-ref data 'email (user-email old-user))]
+               [flags (hash-ref data 'flags (user-flags old-user))]
+               [premium-type (hash-ref data 'premium_type (user-premium-type old-user))]
+               [public-flags (hash-ref data 'public_flags (user-public-flags old-user))]))
 
 (define (update-member old-member data)
   (struct-copy member old-member

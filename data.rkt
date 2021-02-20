@@ -201,7 +201,10 @@
 (define (hash->member data)
   (and data
        (member
-        (hash->user (hash-ref data 'user #f))
+        (let ([ud (hash-ref data 'user #f)])
+          (and ud
+               (not (hash-empty? ud)) ; Apparently this optional, nonnull field can also just be an empty object. WTF???
+               (hash->user ud)))
         (hash-ref data 'nick #f)
         (hash-ref data 'roles)
         (hash-ref data 'joined_at)
@@ -526,6 +529,20 @@
            "data-examples.rkt")
 
   (json-null #f)
+
+  (make-test-suite
+   "User deserialization"
+   (list
+    (test-not-exn
+     "Normal user"
+     (thunk (hash->user (string->jsexpr user-example))))))
+
+  (make-test-suite
+   "Member deserialization"
+   (list
+    (test-not-exn
+     "Normal member"
+     (thunk (hash->member (string->jsexpr member-example))))))
   
   (make-test-suite
    "Message deserialization"

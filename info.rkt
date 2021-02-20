@@ -4,7 +4,7 @@
                "http-easy"
                "rfc6455"
                "rackunit-lib"
-               "html-parsing"
+               "scribble-lib"
                "srfi-lite-lib"))
 (define build-deps '("scribble-lib" "racket-doc"))
 (define scribblings '(("scribblings/racket-cord.scrbl" ())))

@@ -52,7 +52,7 @@
 (define (json-ws-read ws)
   (let ([data (ws-recv ws #:payload-type 'text)])
     (if (string? data)
-        (string->jsexpr data)
+        (string->jsexpr data #:null #f)
         eof)))
 
 (define (accept-hello client data)

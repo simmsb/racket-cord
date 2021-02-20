@@ -58,6 +58,76 @@
    [heartbeat-received #:mutable]
    [seq #:mutable]))
 
+(struct/contract user
+  ([id (or/c string? #f)]
+   [username string?]
+   [discriminator string?]
+   [avatar (or/c string? #f)]
+   [bot boolean?]
+   [system boolean?]
+   [mfa-enabled boolean?]
+   [locale (or/c string? #f)]
+   [verified boolean?]
+   [email (or/c string? #f)]
+   [flags (or/c integer? #f)]
+   [premium-type (or/c integer? #f)]
+   [public-flags (or/c integer? #f)])
+  #:transparent)
+
+(define (hash->user data)
+  (and data
+       (user
+        (hash-ref data 'id)
+        (hash-ref data 'username)
+        (hash-ref data 'discriminator)
+        (hash-ref data 'avatar #f)
+        (hash-ref data 'bot #f)
+        (hash-ref data 'system #f)
+        (hash-ref data 'mfa_enabled #f)
+        (hash-ref data 'locale #f)
+        (hash-ref data 'verified #f)
+        (hash-ref data 'email #f)
+        (hash-ref data 'flags #f)
+        (hash-ref data 'premium_type #f)
+        (hash-ref data 'public_flags #f))))
+
+(struct/contract emoji
+  ([id (or/c string? #f)]
+   [name (or/c string? #f)]
+   [roles (listof integer?)]
+   [user (or/c user? #f)]
+   [require-colons boolean?]
+   [managed boolean?]
+   [animated boolean?]
+   [available boolean?])
+  #:transparent)
+
+(define (hash->emoji data)
+  (and data
+       (emoji
+        (hash-ref data 'id #f)
+        (hash-ref data 'name #f)
+        (hash-ref data 'roles '())
+        (hash->user (hash-ref data 'user #f))
+        (hash-ref data 'require_colons #f)
+        (hash-ref data 'managed #f)
+        (hash-ref data 'animated #f)
+        (hash-ref data 'available #f))))
+
+(struct/contract
+ reaction
+ ([count integer?]
+  [me boolean?]
+  [emoji emoji?])
+ #:transparent)
+
+(define (hash->reaction data)
+  (and data
+       (reaction
+        (hash-ref data 'count)
+        (hash-ref data 'me)
+        (hash->emoji (hash-ref data 'emoji)))))
+
 (struct guild
   (shard-id
    id
@@ -116,22 +186,6 @@
    application-id)
   #:transparent)
 
-(struct/contract user
-  ([id integer?]
-   [username string?]
-   [discriminator string?]
-   [avatar (or/c string? #f)]
-   [bot (or/c boolean? 'null)]
-   [system (or/c boolean? 'null)]
-   [mfa-enabled (or/c boolean? 'null)]
-   [locale (or/c string? #f)]
-   [verified (or/c boolean? 'null)]
-   [email (or/c string? #f)]
-   [flags (or/c integer? #f)]
-   [premium-type (or/c integer? #f)]
-   [public-flags (or/c integer? #f)])
-  #:transparent)
-
 (struct/contract member
   ([user (or/c user? #f)]
    [nick (or/c string? #f)]
@@ -140,38 +194,172 @@
    [premium-since (or/c string? #f)]
    [deaf boolean?]
    [mute boolean?]
-   [pending (or/c boolean? 'null)]
+   [pending boolean?]
    [permissions (or/c string? #f)])
+  #:transparent) 
+
+(define (hash->member data)
+  (and data
+       (member
+        (hash->user (hash-ref data 'user #f))
+        (hash-ref data 'nick #f)
+        (hash-ref data 'roles)
+        (hash-ref data 'joined_at)
+        (hash-ref data 'premium_since #f)
+        (hash-ref data 'deaf)
+        (hash-ref data 'mute)
+        (hash-ref data 'pending #f)
+        (hash-ref data 'permissions #f))))
+
+(struct/contract
+ attachment
+ ([id string?]
+  [filename string?]
+  [size integer?]
+  [url string?]
+  [proxy-url string?]
+  [height (or/c integer? #f)]
+  [width (or/c integer? #f)])
+ #:transparent)
+
+(define (hash->attachment data)
+  (and data
+       (attachment
+        (hash-ref data 'id)
+        (hash-ref data 'filename)
+        (hash-ref data 'size)
+        (hash-ref data 'url)
+        (hash-ref data 'proxy-url)
+        (hash-ref data 'height #f)
+        (hash-ref data 'width #f))))
+
+(struct/contract
+ embed
+ ([title (or/c string? #f)]
+  [type (or/c string? #f)]
+  [description (or/c string? #f)]
+  [url (or/c string? #f)]
+  [timestamp (or/c string? #f)]
+  [color (or/c integer? #f)]
+  ; XXX untyped
+  [footer any/c]
+  [image any/c]
+  [thumbnail any/c]
+  [video any/c]
+  [provider any/c]
+  [author any/c]
+  [fields any/c])
+ #:transparent)
+
+(define (hash->embed data)
+  (and data
+       (embed
+        (hash-ref data 'title #f)
+        (hash-ref data 'type #f)
+        (hash-ref data 'description #f)
+        (hash-ref data 'url #f)
+        (hash-ref data 'timestamp #f)
+        (hash-ref data 'color #f)
+        (hash-ref data 'footer #f)
+        (hash-ref data 'image #f)
+        (hash-ref data 'thumbnail #f)
+        (hash-ref data 'video #f)
+        (hash-ref data 'provider #f)
+        (hash-ref data 'author #f)
+        (hash-ref data 'fields #f))))
+
+(struct/contract
+ message-reference
+ ([message-id (or/c string? #f)]
+  [channel-id (or/c string? #f)]
+  [guild-id (or/c string? #f)]
+  [fail-if-not-exists boolean?])
+ #:transparent)
+
+(define (hash->message-reference data)
+  (and data
+       (message-reference 
+        (hash-ref data 'message_id #f)
+        (hash-ref data 'channel_id #f)
+        (hash-ref data 'guild_id #f)
+        (hash-ref data 'fail_if_not_exists #f))))
+
+(struct/contract message
+  ([id string?]
+   [channel-id string?]
+   [guild-id (or/c string? #f)]
+   [author user?]
+   [member (or/c member? #f)]
+   [content string?]
+   [timestamp string?]
+   [edited-timestamp (or/c string? #f)]
+   [tts boolean?]
+   [mention-everyone boolean?]
+   [mentions (listof user?)] ; XXX: "Additional member field"
+   [mention-roles (listof string?)]
+   [mention-channels (listof any/c)]
+   [attachments (listof attachment?)]
+   [embeds (listof embed?)]
+   [reactions (listof reaction?)]
+   [nonce (or/c integer? string? #f)]
+   [pinned boolean?]
+   [webhook_id (or/c string? #f)]
+   [type integer?]
+   [activity any/c]
+   [application any/c]
+   [message-reference (or/c message-reference? #f)]
+   [flags (or/c integer? #f)]
+   [stickers (listof any/c)]
+   [referenced-message (or/c (recursive-contract message? #:flat) #f)])
   #:transparent)
 
-(struct message
-  (id
-   channel-id
-   author
-   content
-   timestamp
-   edited-timestamp
-   tts
-   mention-everyone
-   mentions
-   mention-roles
-   attachments
-   embeds
-   reactions
-   pinned
-   type)
-  #:transparent)
+(define (hash->message data)
+  (and data 
+       (message
+        (hash-ref data 'id)
+        (hash-ref data 'channel_id)
+        (hash-ref data 'guild_id #f)
+        (hash->user (hash-ref data 'author))
+        (hash->member (hash-ref data 'member #f))
+        (hash-ref data 'content)
+        (hash-ref data 'timestamp) ;; TODO: parse timestamps
+        (hash-ref data 'edited_timestamp #f)
+        (hash-ref data 'tts)
+        (hash-ref data 'mention_everyone)
+        (map hash->user (hash-ref data 'mentions))
+        (hash-ref data 'mention_roles)
+        (hash-ref data 'mention_channels null)
+        (map hash->attachment (hash-ref data 'attachments))
+        (map hash->embed (hash-ref data 'embeds))
+        (map hash->reaction (hash-ref data 'reactions null))
+        (hash-ref data 'nonce #f)
+        (hash-ref data 'pinned)
+        (hash-ref data 'webhook_id #f)
+        (hash-ref data 'type)
+        (hash-ref data 'activity #f)
+        (hash-ref data 'application #f)
+        (hash->message-reference (hash-ref data 'message-reference #f))
+        (hash-ref data 'flags #f)
+        (hash-ref data 'stickers null)
+        (hash->message (hash-ref data 'referenced_message #f)))))
 
 (struct/contract discord-role-tags
-  ([bot-id (or/c integer? #f)]
-   [integration-id (or/c integer? #f)]
+  ([bot-id (or/c string? #f)]
+   [integration-id (or/c string? #f)]
    ; XXX premium_subscriber typed as "null" in docs,
    ; typing as nonnull boolean for now (true if presence, false if absent)
    [premium-subscriber boolean?]) 
   #:transparent)
 
+(define (hash->role-tags data)
+  (and data
+       (discord-role-tags
+        (hash-ref data 'bot_id #f)
+        (hash-ref data 'integration_id #f)
+        (hash-ref data 'premium_subscriber #f))))
+
 (struct/contract role
-  ([id integer?]
+  ([id string?]
    [name string?]
    [color integer?]
    [hoist boolean?]
@@ -182,16 +370,18 @@
    [tags (or/c discord-role-tags? #f)])
   #:transparent)
 
-(struct/contract emoji
-  ([id (or/c integer? #f)]
-   [name (or/c string? #f)]
-   [roles (listof integer?)]
-   [user (or/c user? #f)]
-   [require-colons (or/c boolean? 'null)]
-   [managed (or/c boolean? 'null)]
-   [animated (or/c boolean? 'null)]
-   [available (or/c boolean? 'null)])
-  #:transparent)
+(define (hash->role data)
+  (and data
+       (role
+        (hash-ref data 'id)
+        (hash-ref data 'name)
+        (hash-ref data 'color)
+        (hash-ref data 'hoist)
+        (hash-ref data 'position)
+        (hash-ref data 'permissions)
+        (hash-ref data 'managed)
+        (hash-ref data 'mentionable)
+        (hash->role-tags (hash-ref data 'tags #f)))))
 
 (struct game
   (name
@@ -287,84 +477,6 @@
       (hash-ref data 'owner_id null)
       (hash-ref data 'application_id null))]))
 
-(define (hash->user data)
-  (user
-   (hash-ref data 'id)
-   (hash-ref data 'username)
-   (hash-ref data 'discriminator)
-   (hash-ref data 'avatar #f)
-   (hash-ref data 'bot 'null)
-   (hash-ref data 'system 'null)
-   (hash-ref data 'mfa_enabled 'null)
-   (hash-ref data 'locale #f)
-   (hash-ref data 'verified 'null)
-   (hash-ref data 'email #f)
-   (hash-ref data 'flags #f)
-   (hash-ref data 'premium_type #f)
-   (hash-ref data 'public_flags #f)))
-
-(define (hash->member data)
-  (member
-   (let ([u (hash-ref data 'user #f)])
-     (and u (hash->user u)))
-   (hash-ref data 'nick #f)
-   (hash-ref data 'roles)
-   (hash-ref data 'joined_at)
-   (hash-ref data 'premium_since #f)
-   (hash-ref data 'deaf)
-   (hash-ref data 'mute)
-   (hash-ref data 'pending 'null)
-   (hash-ref data 'permissions 'null)))
-
-(define (hash->message data)
-  (message
-   (hash-ref data 'id)
-   (hash-ref data 'channel_id)
-   (hash->user (hash-ref data 'author))
-   (hash-ref data 'content)
-   (hash-ref data 'timestamp) ;; TODO: parse timestamps
-   (hash-ref data 'edited_timestamp null)
-   (hash-ref data 'tts)
-   (hash-ref data 'mention_everyone)
-   (extract-and-parse data 'mentions hash->user)
-   (extract-and-parse data 'mention_roles hash->role)
-   (hash-ref data 'attachments)
-   (hash-ref data 'embeds)
-   (hash-ref data 'reactions null)
-   (hash-ref data 'pinned)
-   (hash-ref data 'type)))
-
-(define (hash->role-tags data)
-  (discord-role-tags
-   (hash-ref data 'bot_id #f)
-   (hash-ref data 'integration_id #f)
-   (hash-ref data 'premium_subscriber #f))) ; typed as "null" in docs, so only check presence of key
-
-(define (hash->role data)
-  (role
-   (hash-ref data 'id)
-   (hash-ref data 'name)
-   (hash-ref data 'color)
-   (hash-ref data 'hoist)
-   (hash-ref data 'position)
-   (hash-ref data 'permissions)
-   (hash-ref data 'managed)
-   (hash-ref data 'mentionable)
-   (let ([rt (hash-ref data 'tags #f)])
-     (and rt (hash->role-tags rt)))))
-
-(define (hash->emoji data)
-  (emoji
-   (hash-ref data 'id #f)
-   (hash-ref data 'name #f)
-   (hash-ref data 'roles '())
-   (let ([ud (hash-ref data 'user #f)])
-     (and ud (hash->user ud)))
-   (hash-ref data 'require_colons 'null)
-   (hash-ref data 'managed 'null)
-   (hash-ref data 'animated 'null)
-   (hash-ref data 'available 'null)))
-
 (define (hash->game data)
   (game
    (hash-ref data 'name)
@@ -406,3 +518,23 @@
 
 (define (update-member old-member data)
   old-member)
+
+
+(module* test #f
+  (require json
+           rackunit
+           "data-examples.rkt")
+
+  (json-null #f)
+  
+  (make-test-suite
+   "Message deserialization"
+
+   (list 
+    (test-not-exn
+     "Normal message"
+     (thunk (hash->message (string->jsexpr message-example))))
+
+    (test-not-exn
+     "Crossposted message"
+     (thunk (hash->message (string->jsexpr message-crosspost-example)))))))

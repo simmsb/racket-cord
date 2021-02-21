@@ -205,7 +205,7 @@ Architecture:
                  (channel-put (ws-client-stop-channel client) '("Received invalid session" . d))]
                 [(== op-hello)
                  (thread-send (ws-client-heartbeat-thread client)
-                              (/ (hash-ref data 'heartbeat_interval) 1000))
+                              (/ (hash-ref d 'heartbeat_interval) 1000))
                  (if (and (ws-client-seq client) (ws-client-session-id client))
                      (send-resume client)
                      (send-identify client (hash)))] ;; TODO: sort out presence passing

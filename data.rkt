@@ -189,7 +189,7 @@
 (struct/contract member
   ([user (or/c user? #f)]
    [nick (or/c string? #f)]
-   [roles (listof integer?)]
+   [roles (listof string?)]
    [joined-at string?]
    [premium-since (or/c string? #f)]
    [deaf boolean?]

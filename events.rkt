@@ -111,7 +111,6 @@
 
 (define (event-ready ws-client client data)
   (let ([session-id (hash-ref data 'session_id)]
-        [private-channels (hash-ref data 'private_channels)]
         [guilds (hash-ref data 'guilds)]
         [user (hash-ref data 'user)])
     (set-ws-client-session-id! ws-client session-id)
@@ -120,8 +119,7 @@
     (for ([guild-obj guilds])
       (hash-set! (client-guilds client) (hash-ref guild-obj 'id)
                  (hash->guild (ws-client-shard-id ws-client) guild-obj))) ;; these are only partials idk
-    (for ([priv private-channels])
-      (hash-set! (client-private-channels client) (hash-ref priv 'id) (hash->channel priv)))))
+    ))
 
 (define (event-guild-create ws-client client data)
   (hash-set! (client-guilds client)

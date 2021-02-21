@@ -232,7 +232,7 @@
         (hash-ref data 'filename)
         (hash-ref data 'size)
         (hash-ref data 'url)
-        (hash-ref data 'proxy-url)
+        (hash-ref data 'proxy_url)
         (hash-ref data 'height #f)
         (hash-ref data 'width #f))))
 

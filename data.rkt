@@ -34,6 +34,7 @@
 
 (struct client
   (shards
+   shard-threads
    user
    guilds
    private-channels
@@ -46,16 +47,18 @@
   #:transparent)
 
 (struct ws-client
-  ([ws #:mutable]
-   token
+  (token
    client
-   [gateway-url #:mutable]
    shard-id
-   [ready #:mutable]
-   [session-id #:mutable]
+   
+   [gateway-url #:mutable]
+   [socket #:mutable]
    [heartbeat-thread #:mutable]
    [recv-thread #:mutable]
-   [heartbeat-received #:mutable]
+   [heartbeat-acked #:mutable]
+   [stop-channel #:mutable]
+
+   [session-id #:mutable]
    [seq #:mutable]))
 
 (struct/contract user

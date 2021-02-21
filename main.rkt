@@ -73,6 +73,7 @@
          (client
           null
           null
+          null
           (make-hash)
           (make-hash)
           (make-hash)
@@ -90,8 +91,7 @@
    (linebreak)
    "This function blocks until the client is stopped through " (racket stop-client) ".")))
 (define (start-client client)
-  (for ([shard (client-shards client)])
-    (connect shard))
+  (start-client-no-wait client) 
   (semaphore-wait (client-running client)))
 
 (provide
@@ -99,16 +99,17 @@
   start-client-no-wait (-> client? void?) (client)
   ("Same as " (racket start-client) " but does not block the calling thread.")))
 (define (start-client-no-wait client)
-  (for ([shard (client-shards client)])
-    (connect shard)))
+  (set-client-shard-threads!
+   client
+   (map start-shard (client-shards client))))
 
 (provide
  (proc-doc/names
   stop-client (-> client? void?) (client)
   ("Stops a client")))
 (define (stop-client client)
-  (for ([shard (client-shards client)])
-    (disconnect shard))
+  (for ([shard (client-shard-threads client)])
+    (stop-shard shard))
   (semaphore-post (client-running client)))
 
 (provide
@@ -128,4 +129,4 @@
                        #:afk [afk #f])
   (let* ([guild (get-guild client guild-id)]
          [shard (list-ref (client-shards client) (guild-shard-id guild))])
-    (send-status-update shard since game status afk)))
+    (send-presence-update shard since game status afk)))

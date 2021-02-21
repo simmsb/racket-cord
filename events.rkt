@@ -32,7 +32,7 @@
   (thread
    (thunk
     (log-discord-debug "DISPATCHING EVENT: ~a" type)
-    (with-handlers ([(const #f)
+    (with-handlers ([exn:fail?
                      (lambda (v)
                        (log-discord-warning "Event ~a ERRORED with: ~a" type v))])
       (let ([client (ws-client-client ws-client)]

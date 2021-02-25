@@ -195,12 +195,18 @@
 
 (define (create-message client channel-id
                         [content ""]
-                        #:embed [embed null]
+                        #:allowed-mentions [mentions #f]
+                        #:reply-to [reference #f]
+                        #:embed [embed #f]
                         #:tts [tts #f]
                         #:file [attachment #f])
   (let ([data (make-hash)])
-    (unless (null? embed)
+    (when embed
       (hash-set! data 'embed embed))
+    (when reference
+      (hash-set! data 'message_reference reference))
+    (when mentions
+      (hash-set! data 'allowed_mentions mentions))
     (hash-set! data 'tts tts)
     (hash-set! data 'content content)
     (hash->message (run-route (make-route post "channels" "{channel-id}" "messages" #:channel-id channel-id)

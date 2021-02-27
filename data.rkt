@@ -9,7 +9,7 @@
          (struct-out guild-channel)
          (struct-out dm-channel)
          (struct-out user)
-         (struct-out member)
+         (struct-out guild-member)
          (struct-out message)
          (struct-out role)
          (struct-out emoji)
@@ -19,7 +19,7 @@
          hash->guild
          hash->channel
          hash->user
-         hash->member
+         hash->guild-member
          hash->message
          hash->role
          hash->emoji
@@ -189,7 +189,7 @@
    application-id)
   #:transparent)
 
-(struct/contract member
+(struct/contract guild-member
   ([user (or/c user? #f)]
    [nick (or/c string? #f)]
    [roles (listof string?)]
@@ -201,9 +201,9 @@
    [permissions (or/c string? #f)])
   #:transparent) 
 
-(define (hash->member data)
+(define (hash->guild-member data)
   (and data
-       (member
+       (guild-member
         (let ([ud (hash-ref data 'user #f)])
           (and ud
                (not (hash-empty? ud)) ; Apparently this optional, nonnull field can also just be an empty object. WTF???
@@ -295,7 +295,7 @@
    [channel-id string?]
    [guild-id (or/c string? #f)]
    [author user?]
-   [member (or/c member? #f)]
+   [member (or/c guild-member? #f)]
    [content string?]
    [timestamp string?]
    [edited-timestamp (or/c string? #f)]
@@ -326,7 +326,7 @@
         (hash-ref data 'channel_id)
         (hash-ref data 'guild_id #f)
         (hash->user (hash-ref data 'author))
-        (hash->member (hash-ref data 'member #f))
+        (hash->guild-member (hash-ref data 'member #f))
         (hash-ref data 'content)
         (hash-ref data 'timestamp) ;; TODO: parse timestamps
         (hash-ref data 'edited_timestamp #f)
@@ -479,7 +479,7 @@
    (hash-ref data 'member_count null)
    (hash-ref data 'voice_states null)
    (bind make-hash (extract-and-parse data 'members (lambda (data) (cons (hash-ref (hash-ref data 'user) 'id)
-                                                                    (hash->member data)))))
+                                                                    (hash->guild-member data)))))
    (bind make-hash (extract-and-parse data 'channels
                                       (get-id (lambda (d) (hash->channel d #:guild-id (hash-ref data 'id))))))
    (hash-ref data 'presences null)))
@@ -557,7 +557,7 @@
    (list
     (test-not-exn
      "Normal member"
-     (thunk (hash->member (string->jsexpr member-example))))))
+     (thunk (hash->guild-member (string->jsexpr member-example))))))
 
   (make-test-suite
    "Webhook deserialization"

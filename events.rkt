@@ -63,7 +63,7 @@
                 (each funs client guild (map hash->emoji (hash-ref data 'emojis))))]
              [(guild-member-add)
               (let ([guild (get-guild client (hash-ref data 'guild_id))])
-                (each funs client (hash->member data) guild))]
+                (each funs client (hash->guild-member data) guild))]
              [(guild-member-remove) ;; get guild object, get member object from guild object
               (each funs client (get-member client (member-hash-id data) (hash-ref data 'guild_id)))]
              [(guild-member-update presence-update)
@@ -163,7 +163,7 @@
 (define (event-guild-member-add ws-client client data)
   (let ([guild (get-guild client (hash-ref data 'guild_id))])
     (hash-set! (guild-members guild) (member-hash-id data)
-               (hash->member data))))
+               (hash->guild-member data))))
 
 (define (event-guild-member-remove ws-client client data)
   (let ([guild (get-guild client (hash-ref data 'guild_id))])
@@ -179,7 +179,7 @@
   (let ([guild (get-guild client (hash-ref data 'guild_id))])
     (for ([i (hash-ref data 'members)])
       (hash-set! (guild-members guild) (member-hash-id i)
-                 (hash->member i)))))
+                 (hash->guild-member i)))))
 
 (define (event-guild-role-create ws-client client data)
   (let ([guild (get-guild client (hash-ref data 'guild_id))]

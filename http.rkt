@@ -405,20 +405,20 @@
              (client-http-client client) #:data (json-payload data)))
 
 (define (get-guild-member client guild-id user-id)
-  (hash->member (run-route
+  (hash->guild-member (run-route
                 (make-route get "guilds" "{guild-id}" "members" "{user-id}"
                             #:guild-id guild-id)
                 (client-http-client client) `((user-id . ,user-id)))))
 
 (define (list-guild-members client guild-id #:limit [limit 1] #:after [after 0])
-  (map hash->member
+  (map hash->guild-member
        (run-route (make-route get "guilds" "{guild-id}" "members"
                               #:guild-id guild-id)
                   (client-http-client client)
                   #:params `((limit . ,limit) (after . ,after)))))
 
 (define (add-guild-member client guild-id user-id data)
-  (hash->member (run-route
+  (hash->guild-member (run-route
                 (make-route put "guilds" "{guild-id}" "members" "{user-id}"
                             #:guild-id guild-id)
                 (client-http-client client) `((user-id . ,user-id))

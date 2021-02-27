@@ -22,7 +22,7 @@
          (struct-out guild-channel)
          (struct-out dm-channel)
          (struct-out user)
-         (struct-out member)
+         (struct-out guild-member)
          (struct-out message)
          (struct-out role)
          (struct-out emoji))

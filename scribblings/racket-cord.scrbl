@@ -52,15 +52,6 @@ Example usage of the library:
 @include-previously-extracted["extracted.scrbl" "stop-client"]
 @include-previously-extracted["extracted.scrbl" "update-status"]
 
-@defproc[(on-event [evt symbol?]
-                   [client client?]
-                   [callback procedure?]) void?]{
-Register an event on the client.
-The type of procedure passed is described in @secref{events}.
-
-@racket[evt]: A symbol of the event name, for example @racket['message-create]
-}
-
 @defstruct*[
   client
   ([shards list?]
@@ -75,6 +66,11 @@ The type of procedure passed is described in @secref{events}.
   #:transparent]{
 Stores the state of the client.
 }
+
+@section{Data Models}
+
+Note that these have rotted significantly at the time of writing. Please see
+the source for precise details. Not all data models are fully specified or working.
 
 @defstruct*[
   guild
@@ -219,7 +215,24 @@ Stores the state of the client.
 
 @section[#:tag "events"]{Events}
 
-User the procedure @racket[on-event] to register an event.
+@defproc[(on-event [evt symbol?]
+                   [client client?]
+                   [callback procedure?]) void?]{
+Subscribe to callbacks for the given gateway event identified by @racket[evt].
+
+The Racket symbol name @racket[evt] corresponding to a given Discord gateway event is
+derived as follows:
+
+@itemlist[@item{Lowercase the event name}
+          @item{Replace underscores with dashes}
+          @item{Convert to symbol}]
+
+For example, the Discord gateway event @tt{MESSAGE_CREATE} would be identified
+as the Racket symbol @racket['message-create].
+
+The exact type for @racket[callback] depends on the specific event, see @secref["typedevents"]
+for more information.
+}
 
 Example:
 @racketblock[
@@ -228,7 +241,33 @@ Example:
      (println (message-content message))))
 ]
 
-Event callbacks and their types are described here:
+Each event has a raw counterpart, identified by prepending @tt{raw-} to the Racket
+symbolic name. For example, the raw event symbol for @tt{MESSAGE_CREATE} would be
+@racket['raw-message-create].
+
+@italic{Raw events} contain the raw data as provided by the Discord gateway. In contrast,
+the regular events are unmarshalled into structural representations by the library.
+
+As of the time of writing, the regular events have bitrotted quite a bit and will need
+some work to fix. If you must receive many events reliably, using raw events is recommended.
+
+Raw events will also allow you to immediately react to new features added by
+Discord without having to wait for the library to update.
+
+In contrast to regular events, all raw event callbacks have the same type:
+
+@defproc[(raw-callback [ws-client ws-client?]
+                       [client client?]
+                       [data jsexpr?]) void?]
+
+where @racket[data] is the raw @tt{d} payload received from the Discord gateway.
+
+
+@subsection[#:tag "typedevents"]{Event Callback Signatures}
+
+Below are the expected callback signatures for event handlers.
+
+Note that some of these are no longer accurate and the authors are working on fixing them.
 
 @deftogether[(
   @defproc[(channel-create [client client?]
@@ -284,13 +323,6 @@ Event callbacks and their types are described here:
   @defproc[(typing-start [client client?]
                          [channel-id string?]
                          [user-id string?]) void?])]
-
-Each event has a raw counterpart, for example @racket['raw-message-create].
-All raw events have the form:
-
-@defproc[(raw-event [ws-client ws-client?]
-                    [client client?]
-                    [data jsexpr?]) void?]
 
 @section{Miscellaneous functions}
 

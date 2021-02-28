@@ -46,7 +46,7 @@
   ("Constructs a client with the passed token."
    (linebreak)
    (linebreak)
-   (racket #:auto-shard) ": If #t, ask Discord what the number of shards should be. Only applies if "
+   (racket #:auto-shard) ": If " (racket #t) ", ask Discord what the number of shards should be. Only applies if "
    (racket #:token-type) " is " (racket 'bot) "."
    (linebreak)
    (linebreak)

@@ -116,7 +116,7 @@
  (proc-doc/names
   update-status (->* (client? integer?)
                      (#:since (or/c integer? #f)
-                      #:activities (listof game?) ; TODO: update game to new activities spec
+                      #:activities (listof hash?) ; TODO: update game to new activities spec
                       #:status (or/c "online" "dnd" "idle" "invisible" "offline") ; TODO: make it use symbols?
                       #:afk boolean?)
                      void?)
@@ -129,4 +129,4 @@
                        #:afk [afk #f])
   (let* ([guild (get-guild client guild-id)]
          [shard (list-ref (client-shards client) (guild-shard-id guild))])
-    (send-presence-update shard since game status afk)))
+    (send-status-update shard status afk activities since)))

@@ -14,7 +14,7 @@
          stop-shard
          request-guild-members-by-query
          request-guild-members-by-id
-         update-status
+         send-status-update
          update-voice-state)
 
 (define op-dispatch  0)
@@ -284,7 +284,7 @@ Architecture:
                          'self_mute self-mute
                          'self_deaf self-deaf)))))
 
-(define/contract (update-status client status afk activities since)
+(define/contract (send-status-update client status afk activities since)
   (-> ws-client? string? boolean? (listof hash?) (or/c integer? #f) void?)
   (log-discord-debug "tx: Update status")
   (ws-send! (ws-client-socket client)

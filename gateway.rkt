@@ -284,8 +284,7 @@ Architecture:
                          'self_mute self-mute
                          'self_deaf self-deaf)))))
 
-(define/contract (send-status-update client status afk activities since)
-  (-> ws-client? string? boolean? (listof hash?) (or/c integer? #f) void?)
+(define (send-status-update client status afk activities since)
   (log-discord-debug "tx: Update status")
   (ws-send! (ws-client-socket client)
             (jsexpr->string

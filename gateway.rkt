@@ -14,7 +14,8 @@
          stop-shard
          request-guild-members-by-query
          request-guild-members-by-id
-         send-presence-update)
+         update-status
+         update-voice-state)
 
 (define op-dispatch  0)
 (define op-heartbeat 1)
@@ -243,6 +244,7 @@ Architecture:
                                         query limit
                                         #:presences [presences #f]
                                         #:nonce [nonce #f])
+  (log-discord-debug "tx: Request Guild Members (query)")
   (let ([payload (make-hasheq 'guild_id guild-id
                               'query query
                               'limit limit
@@ -259,7 +261,9 @@ Architecture:
                                      #:user-ids [user-ids null]
                                      #:presences [presences #f]
                                      #:nonce [nonce #f])
-  (let ([payload (make-hasheq 'user_ids user-ids
+  (log-discord-debug "tx: Request Guild Members (id)")
+  (let ([payload (make-hasheq 'guild_id guild-id
+                              'user_ids user-ids
                               'presences presences)])
     (when nonce
       (hash-set! payload 'nonce nonce))
@@ -269,14 +273,26 @@ Architecture:
                 'op op-request-guild-members
                 'd payload)))))
 
-(define (send-presence-update client since game status afk)
-  (log-discord-debug "SENDING STATUS UPDATE")
+(define (update-voice-state client guild-id channel-id self-mute self-deaf)
+  (log-discord-debug "tx: Update Voice State")
+  (ws-send! (ws-client-socket client)
+            (jsexpr->string
+             (hasheq
+              'op op-voice-state-update
+              'd (hasheq 'guild_id guild-id
+                         'channel_id (or channel-id (json-null))
+                         'self_mute self-mute
+                         'self_deaf self-deaf)))))
+
+(define/contract (update-status client status afk activities since)
+  (-> ws-client? string? boolean? (listof hash?) (or/c integer? #f) void?)
+  (log-discord-debug "tx: Update status")
   (ws-send! (ws-client-socket client)
             (jsexpr->string
              (hasheq
               'op op-presence-update
               'd (hasheq
-                  'since (if (not since) (json-null) since)
-                  'game (game->hash game)
+                  'since (or since (json-null))
+                  'activities activities
                   'status status
                   'afk afk)))))

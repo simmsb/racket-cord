@@ -49,3 +49,9 @@
 (define permission-manage-roles #x10000000)
 (define permission-manage-webhooks #x20000000)
 (define permission-manage-emojis #x40000000)
+
+(define activity-type-game 0)
+(define activity-type-streaming 1)
+(define activity-type-listening 2)
+(define activity-type-custom 4)
+(define activity-type-competing 5)

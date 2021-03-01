@@ -12,7 +12,8 @@
 (provide new-ws-client
          start-shard
          stop-shard
-         send-request-guild-members
+         request-guild-members-by-query
+         request-guild-members-by-id
          send-presence-update)
 
 (define op-dispatch  0)
@@ -238,16 +239,35 @@ Architecture:
 
 ; user-facing gateway queries
 
-(define (send-request-guild-members client guild-id #:query [query ""] #:limit [limit 0])
-  (log-discord-debug "REQUESTING GUILD MEMBERS")
-  (ws-send! (ws-client-socket client)
-            (jsexpr->string
-             (hasheq
-              'op op-request-guild-members
-              'd (hasheq
-                  'guild_id guild-id
-                  'query query
-                  'limit 'limit)))))
+(define (request-guild-members-by-query client guild-id
+                                        query limit
+                                        #:presences [presences #f]
+                                        #:nonce [nonce #f])
+  (let ([payload (make-hasheq 'guild_id guild-id
+                              'query query
+                              'limit limit
+                              'presences presences)])
+    (when nonce
+      (hash-set! payload 'nonce nonce))
+    (ws-send! (ws-client-socket client)
+              (jsexpr->string
+               (hasheq
+                'op op-request-guild-members
+                'd payload)))))
+
+(define (request-guild-members-by-id client guild-id
+                                     #:user-ids [user-ids null]
+                                     #:presences [presences #f]
+                                     #:nonce [nonce #f])
+  (let ([payload (make-hasheq 'user_ids user-ids
+                              'presences presences)])
+    (when nonce
+      (hash-set! payload 'nonce nonce))
+    (ws-send! (ws-client-socket client)
+              (jsexpr->string
+               (hasheq
+                'op op-request-guild-members
+                'd payload)))))
 
 (define (send-presence-update client since game status afk)
   (log-discord-debug "SENDING STATUS UPDATE")

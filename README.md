@@ -25,4 +25,4 @@ Both are converted to `#f`, as is standard Racket convention.
 
 # Sample Projects
 
-* R16: A Racket trick bot for Discord - [https://sr.ht/~williewillus/r16]()
+* R16: A Racket trick bot for Discord - https://sr.ht/~williewillus/r16

@@ -5,27 +5,37 @@
 
 (provide (struct-out client)
          (struct-out ws-client)
+         (struct-out user)
+         (struct-out emoji)
+         (struct-out reaction)
          (struct-out guild)
          (struct-out guild-channel)
          (struct-out dm-channel)
-         (struct-out user)
          (struct-out guild-member)
+         (struct-out attachment)
+         (struct-out embed)
+         (struct-out message-reference)
          (struct-out message)
+         (struct-out discord-role-tags)
          (struct-out role)
-         (struct-out emoji)
          (struct-out game)
          (struct-out invite)
          (struct-out webhook)
-         hash->guild
-         hash->channel
          hash->user
-         hash->guild-member
-         hash->message
-         hash->role
          hash->emoji
-         hash->game
+         hash->reaction
+         hash->guild-member
+         hash->attachment
+         hash->embed
+         hash->message-reference
+         hash->message
+         hash->role-tags
+         hash->role
          hash->invite
          hash->webhook
+         hash->guild
+         hash->channel
+         hash->game
          game->hash
          update-guild
          update-channel

@@ -12,6 +12,7 @@
          get-ws-url
          get-ws-url-bot
          (struct-out exn:fail:network:http:discord)
+         attachment?
          (contract-out
           [attachment
            (-> bytes? (or/c string? bytes?) (or/c string? bytes?) attachment?)]))

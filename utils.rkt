@@ -1,6 +1,10 @@
-#lang racket
+#lang racket/base
 
-(require net/base64)
+(require net/base64
+         racket/function
+         racket/list
+         racket/match
+         (for-syntax racket/base))
 
 (provide (all-defined-out))
 

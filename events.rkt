@@ -1,6 +1,10 @@
-#lang racket
+#lang racket/base
 
-(require "data.rkt"
+(require racket/function
+         racket/match
+         racket/set
+         racket/string
+         "data.rkt"
          "utils.rkt")
 
 (provide add-events

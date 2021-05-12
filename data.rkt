@@ -1,7 +1,9 @@
-#lang racket
+#lang racket/base
 
-(require racket/hash
-         "utils.rkt")
+(require
+ racket/contract
+ racket/function
+ "utils.rkt")
 
 (provide (struct-out client)
          (struct-out ws-client)

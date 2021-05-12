@@ -1,8 +1,12 @@
-#lang racket
+#lang racket/base
 
 (require net/http-easy
          json
          net/url
+         racket/contract
+         racket/format
+         racket/function
+         racket/match
          racket/string
          srfi/19
          "data.rkt"

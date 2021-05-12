@@ -1,10 +1,9 @@
 #lang racket
 
 (require net/rfc6455
-         racket/hash
          json
          (only-in "http.rkt"
-                  get-ws-url)
+                  get-ws-url-infallible)
          "data.rkt"
          "events.rkt"
          "utils.rkt")
@@ -148,10 +147,11 @@ Architecture:
     (let retry ([count 0]
                 [backoff 1])
       (if (> count 3)
-          (begin (set-ws-client-gateway-url! client (get-ws-url (client-http-client (ws-client-client client)))) ;; This is pretty bad
-                 (log-discord-debug "Failed to connect to gateway more than 3 times, getting a new url.")
-                 (sleep 5)
-                 (make-ws-conn))
+          (begin
+            (log-discord-debug "Failed to connect to gateway more than 3 times, getting a new url.")
+            (set-ws-client-gateway-url! client (get-ws-url-infallible (client-http-client (ws-client-client client)))) ;; This is pretty bad
+            (sleep 5)
+            (make-ws-conn))
           (with-handlers ([exn:fail:network?
                            (lambda (e)
                              (begin (sleep backoff)

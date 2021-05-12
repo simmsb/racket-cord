@@ -10,6 +10,7 @@
 
 (provide make-http-client
          get-ws-url
+         get-ws-url-infallible
          get-ws-url-bot
          (struct-out exn:fail:network:http:discord)
          attachment?
@@ -88,6 +89,13 @@
       [(response #:status-code code #:body body)
        (error (~a "http error\n"
                   "  response: " (bytes->string/utf-8 body)))])))
+
+(define (get-ws-url-infallible http-client)
+  (let retry ()
+    (with-handlers ([exn:fail? (lambda (e)
+                                 (sleep 5)
+                                 (retry))])
+      (get-ws-url http-client))))
 
 (define (get-ws-url-bot http-client)
   (let* ([resp ((http-client-requester http-client)

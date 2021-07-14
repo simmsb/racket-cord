@@ -9,19 +9,16 @@ A library for interfacing with Discord using Racket.
 [Docs](https://docs.racket-lang.org/racket-cord/index.html)
 
 # Design Notes
-## Typing
-* Effort is ongoing to provide (contracted) structs for all Discord API objects in `data.rkt`.
-* Since this is an ongoing effort, some data may remain untyped/in hash-map form.
-If something has no contract or has an `any/c` contract, this is probably the case.
-* Please check `data.rkt` for more details.
+Typed wrappers will not be provided for Discord structs, and the remaining ones in the code
+will be actively removed.
 
-## Representation of Null Values
+The rationale can be found in this [commit message](https://github.com/simmsb/racket-cord/commit/64b8f1de97fccb01487571362e2b4bac749c3691)
 
-* In bindings of Discord data types, this library does not distinguish between entries
-omitted in responses from Discord, or entries with a `null` value.
-Both are converted to `#f`, as is standard Racket convention.
-* Note that this causes ambiguity in the case of nullable booleans (which are a terrible idea in the first place).
-* Note that cleanups and refactors are still in progress and this convention is not observed everywhere yet.
+Essentially, I don't have the time nor energy to maintain typed wrappers when Discord's API
+is so unstable, the documentation so bad, and no machine-readable specs exist.
+
+It shouldn't be too hard to provide an addon library on top of this one that exposes typed
+wrappers, if someone is interested in subjecting themselves to that pain.
 
 # Sample Projects
 

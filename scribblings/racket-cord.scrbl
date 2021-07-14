@@ -19,17 +19,17 @@ Example usage of the library:
 
 (define bot-token (getenv "BOT_TOKEN"))
 
-(define myclient (make-client bot-token #:auto-shard #t))
+(define myclient (make-client bot-token #:auto-shard #t #:intents (list intent-guilds intent-guild-messages)))
 
 (on-event
-  'message-create myclient
-  (lambda (client message)
-    (unless (string=? (user-id (message-author message)) ; dont reply to ourselves
+  'raw-message-create myclient
+  (lambda (_ws-client client payload)
+    (unless (string=? (hash-ref (hash-ref payload 'author) 'id) ; dont reply to ourselves
                       (user-id (client-user client)))
       (cond
-        [(string-prefix? (message-content message) "!echo ")
-         (http:create-message client (message-channel-id message)
-                              (string-trim (message-content message) "!echo " #:right? #f))]))))
+        [(string-prefix? (hash-ref payload 'content) "!echo ")
+         (http:create-message client (hash-ref payload 'channel_id)
+                              (string-trim (hash-ref  payload 'content) "!echo " #:right? #f))]))))
 
 ;; logging stufff
 
@@ -69,8 +69,7 @@ Stores the state of the client.
 
 @section{Data Models}
 
-Note that these have rotted significantly at the time of writing. Please see
-the source for precise details. Not all data models are fully specified or working.
+Note that these have rotted significantly at the time of writing and are likely to be removed.
 
 @defstruct*[
   guild
@@ -225,104 +224,20 @@ derived as follows:
 
 @itemlist[@item{Lowercase the event name}
           @item{Replace underscores with dashes}
-          @item{Convert to symbol}]
+          @item{Convert to symbol}
+          @item{Prefix with "raw-"}]
 
 For example, the Discord gateway event @tt{MESSAGE_CREATE} would be identified
-as the Racket symbol @racket['message-create].
+as the Racket symbol @racket['raw-message-create].
 
-The exact type for @racket[callback] depends on the specific event, see @secref["typedevents"]
-for more information.
+The signature of @racket{callback} should be as follows.
 }
-
-Example:
-@racketblock[
-  (on-event 'message-create
-   (lambda (client message)
-     (println (message-content message))))
-]
-
-Each event has a raw counterpart, identified by prepending @tt{raw-} to the Racket
-symbolic name. For example, the raw event symbol for @tt{MESSAGE_CREATE} would be
-@racket['raw-message-create].
-
-@italic{Raw events} contain the raw data as provided by the Discord gateway. In contrast,
-the regular events are unmarshalled into structural representations by the library.
-
-As of the time of writing, the regular events have bitrotted quite a bit and will need
-some work to fix. If you must receive many events reliably, using raw events is recommended.
-
-Raw events will also allow you to immediately react to new features added by
-Discord without having to wait for the library to update.
-
-In contrast to regular events, all raw event callbacks have the same type:
 
 @defproc[(raw-callback [ws-client ws-client?]
                        [client client?]
                        [data jsexpr?]) void?]
 
 where @racket[data] is the raw @tt{d} payload received from the Discord gateway.
-
-
-@subsection[#:tag "typedevents"]{Event Callback Signatures}
-
-Below are the expected callback signatures for event handlers.
-
-Note that some of these are no longer accurate and the authors are working on fixing them.
-
-@deftogether[(
-  @defproc[(channel-create [client client?]
-                           [channel (or/c dm-channel? guild-channel?)]) void?]
-  @defproc[(channel-delete [client client?]
-                           [channel (or/c dm-channel? guild-channel?)]) void?]
-  @defproc[(channel-update [client client?]
-                           [old-channel (or/c dm-channel? guild-channel?)]
-                           [new-channel (or/c dm-channel? guild-channel?)]) void?]
-  @defproc[(guild-create [client client?]
-                         [guild guild?]) void?]
-  @defproc[(guild-delete [client client?]
-                         [guild guild?]) void?]
-  @defproc[(guild-update [client client?]
-                         [old-guild guild?]
-                         [new-guild guild?]) void?]
-  @defproc[(guild-ban-add [client client?]
-                          [user user?]
-                          [guild guild?]) void?]
-  @defproc[(guild-ban-remove [client client?]
-                             [user user?]
-                             [guild guild?]) void?]
-  @defproc[(guild-emojis-update [client client?]
-                                [guild guild?]
-                                [emojis (listof emoji?)]) void?]
-  @defproc[(guild-member-add [client client?]
-                             [member member?]) void?]
-  @defproc[(guild-member-remove [client client?]
-                                [member member?]) void?]
-  @defproc[(guild-member-update [client client?]
-                                [old-member member?]
-                                [new-member member?]) void?]
-  @defproc[(presence-update [client client?]
-                            [old-member member?]
-                            [new-member member?]) void?]
-  @defproc[(message-create [client client?]
-                           [message message?]) void?]
-  @defproc[(message-delete [client client?]
-                           [message-id string?]) void?]
-  @defproc[(message-reaction-add [client client?]
-                                 [user-id string?]
-                                 [channel-id string?]
-                                 [message-id string?]
-                                 [emoji emoji?]) void?]
-  @defproc[(message-reaction-remove [client client?]
-                                    [user-id string?]
-                                    [channel-id string?]
-                                    [message-id string?]
-                                    [emoji emoji?]) void?]
-  @defproc[(message-reaction-remove-all [client client?]
-                                        [channel-id string?]
-                                        [message-id string?]) void?]
-  @defproc[(typing-start [client client?]
-                         [channel-id string?]
-                         [user-id string?]) void?])]
 
 @section{Miscellaneous functions}
 

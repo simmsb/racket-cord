@@ -9,15 +9,15 @@ A library for interfacing with Discord using Racket.
 [Docs](https://docs.racket-lang.org/racket-cord/index.html)
 
 # Design Notes
-Typed wrappers will not be provided for Discord structs, and the remaining ones in the code
-will be actively removed.
+This library is quite low level. In general, data is returned directly as given by the Discord API,
+without extra conversions into other types.
 
 The rationale can be found in this [commit message](https://github.com/simmsb/racket-cord/commit/64b8f1de97fccb01487571362e2b4bac749c3691)
 
 Essentially, I don't have the time nor energy to maintain typed wrappers when Discord's API
 is so unstable, the documentation so bad, and no machine-readable specs exist.
 
-It shouldn't be too hard to provide an addon library on top of this one that exposes typed
+It shouldn't be too hard to provide a higher-level library on top of this one that exposes typed
 wrappers, if someone is interested in subjecting themselves to that pain.
 
 # Sample Projects

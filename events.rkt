@@ -43,48 +43,7 @@
             [events (client-events (ws-client-client ws-client))]
             [raw-evt (string->symbol (string-downcase (format "raw-~a" (string-replace type "_" "-"))))]
             [evt (string->symbol (string-downcase (string-replace type "_" "-")))])
-        (match (hash-ref events evt null) ;; parsed events
-          [(? null?) null]
-          [funs
-           (case evt
-             [(ready) (each funs client (ws-client-shard-id ws-client))] ;; TODO: delay this until we have all guilds for this shard
-             [(channel-create channel-delete) (each funs client (hash->channel data))]
-             [(channel-update)
-              (let ([old-channel (get-channel client (hash-ref data 'id))]
-                    [new-channel (hash->channel data)])
-                (each funs client old-channel new-channel))]
-             [(guild-create guild-delete)
-              (each funs client (hash->guild (ws-client-shard-id ws-client) data))]
-             [(guild-update)
-              (let ([old-guild (get-guild client (hash-ref data 'id))]
-                    [new-guild (hash->guild (ws-client-shard-id ws-client) data)])
-                (each funs client old-guild new-guild))]
-             [(guild-ban-add client-ban-remove)
-              (each funs client (hash->user data)
-                    (get-guild client (hash-ref data 'guild_id)))]
-             [(guild-emojis-update)
-              (let ([guild (get-guild client (hash-ref data 'guild_id))])
-                (each funs client guild (map hash->emoji (hash-ref data 'emojis))))]
-             [(guild-member-add)
-              (let ([guild (get-guild client (hash-ref data 'guild_id))])
-                (each funs client (hash->guild-member data) guild))]
-             [(guild-member-remove) ;; get guild object, get member object from guild object
-              (each funs client (get-member client (member-hash-id data) (hash-ref data 'guild_id)))]
-             [(guild-member-update presence-update)
-              (let ([old-member (get-member client (member-hash-id data) (hash-ref data 'guild_id))])
-                (each funs client old-member (update-member old-member data)))]
-             [(message-create) (each funs client (hash->message data))]
-             [(message-delete) (each funs client (hash-ref data 'id))] ;; MAYBE: cache messages
-             [(message-reaction-add message-reaction-remove)
-              (each funs client
-                    (hash-ref data 'user_id)
-                    (hash-ref data 'channel_id)
-                    (hash-ref data 'message_id)
-                    (hash->emoji (hash-ref data 'emoji)))]
-             [(message-reaction-remove-all)
-              (each funs client (hash-ref data 'channel_id) (hash-ref data 'message_id))]
-             [(typing-start) (each funs client (hash-ref data 'channel_id) (hash-ref data 'user_id))])])
-        (match (hash-ref events raw-evt null) ;; raw events
+        (match (hash-ref events raw-evt null)
           [(? null?) null]
           [funs (each funs ws-client client data)]))))))
 

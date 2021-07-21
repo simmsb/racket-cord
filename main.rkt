@@ -4,28 +4,18 @@
          (for-doc scribble/base scribble/manual)
          (for-label "data.rkt"))
 
-(require json
-         "constants.rkt"
+(require "constants.rkt"
          "data.rkt"
+         "private/logger.rkt"
          "events.rkt"
-         "gateway.rkt"
-         (prefix-in http: "http.rkt")
-         "utils.rkt")
+         (only-in "gateway.rkt" new-ws-client send-status-update start-shard stop-shard)
+         (prefix-in http: "http.rkt"))
 
 (provide on-event
          (all-from-out "constants.rkt")
-         (all-from-out "utils.rkt")
          (all-from-out "http.rkt")
-         (struct-out game)
          (struct-out client)
-         (struct-out guild)
-         (struct-out guild-channel)
-         (struct-out dm-channel)
-         (struct-out user)
-         (struct-out guild-member)
-         (struct-out message)
-         (struct-out role)
-         (struct-out emoji))
+         discord-logger)
 
 (define (format-token token type)
   (case type
@@ -58,26 +48,25 @@
                      #:auto-shard [auto-shard #f]
                      #:shard-count [shard-count 1])
   (let* ([fmt-token (format-token token token-type)]
-         [client (new-client fmt-token intents)])
+         [http-client (http:make-http-client token)])
     (let-values ([(ws-url shards)
                   (if auto-shard
-                      (http:get-ws-url-bot (client-http-client client))
-                      (values (http:get-ws-url (client-http-client client))
+                      (http:get-ws-url-bot http-client)
+                      (values (http:get-ws-url http-client)
                               shard-count))])
-      (set-client-shards! client (map (lambda (n) (new-ws-client client n ws-url))
-                                      (range shards))))
-    client))
+      (new-client
+       (map (lambda (n) (new-ws-client client n ws-url))
+            (range shards))
+       http-client token intents))))
 
-(define (new-client token intents)
+(define (new-client shards http-client token intents)
   (let ([clnt
          (client
-          null
-          null
-          null
-          (make-hash)
-          (make-hash)
-          (make-hash)
-          (http:make-http-client token)
+          shards ; shard ws-clients
+          null ; shard-threads
+          #f ; user
+          #hash() ; event handlers
+          http-client
           token
           intents
           (make-semaphore 0))])
@@ -114,19 +103,19 @@
 
 (provide
  (proc-doc/names
-  update-status (->* (client? integer?)
+  update-status (->* (client?)
                      (#:since (or/c integer? #f)
-                      #:activities (listof hash?) ; TODO: update game to new activities spec
+                      #:activities (listof hash?)
                       #:status (or/c "online" "dnd" "idle" "invisible" "offline") ; TODO: make it use symbols?
                       #:afk boolean?)
                      void?)
-  ((client guild-id) ((since #f) (activities null) (status "online") (afk #f)))
+  ((client) ((since #f) (activities null) (status "online") (afk #f)))
   ("Updates the client's status.")))
-(define (update-status client guild-id
+(define (update-status client
                        #:since [since #f]
                        #:activities [activities null]
                        #:status [status "online"]
                        #:afk [afk #f])
-  (let* ([guild (get-guild client guild-id)]
-         [shard (list-ref (client-shards client) (guild-shard-id guild))])
+  ; XXX not quite right?
+  (for ([shard (client-shards client)])
     (send-status-update shard status afk activities since)))

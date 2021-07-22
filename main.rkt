@@ -2,19 +2,22 @@
 
 (require scribble/srcdoc
          (for-doc scribble/base scribble/manual)
-         (for-label "data.rkt"))
+         (for-label "private/data.rkt"))
 
-(require "constants.rkt"
-         "data.rkt"
+(require "private/constants.rkt"
+         "private/data.rkt"
+         "private/events.rkt"
+         (only-in "private/gateway.rkt" new-ws-client send-status-update start-shard stop-shard)
          "private/logger.rkt"
-         "events.rkt"
-         (only-in "gateway.rkt" new-ws-client send-status-update start-shard stop-shard)
          (prefix-in http: "http.rkt"))
 
 (provide on-event
-         (all-from-out "constants.rkt")
+         (all-from-out "private/constants.rkt")
          (all-from-out "http.rkt")
-         (struct-out client)
+         client?
+         client-user
+         client-intents
+         client-events
          discord-logger)
 
 (define (format-token token type)
@@ -48,28 +51,29 @@
                      #:auto-shard [auto-shard #f]
                      #:shard-count [shard-count 1])
   (let* ([fmt-token (format-token token token-type)]
-         [http-client (http:make-http-client token)])
+         [http-client (http:make-http-client fmt-token)])
     (let-values ([(ws-url shards)
                   (if auto-shard
                       (http:get-ws-url-bot http-client)
                       (values (http:get-ws-url http-client)
                               shard-count))])
-      (new-client
-       (map (lambda (n) (new-ws-client client n ws-url))
-            (range shards))
-       http-client token intents))))
+      (new-client ws-url shards http-client fmt-token intents))))
 
-(define (new-client shards http-client token intents)
+(define (new-client ws-url shard-count http-client token intents)
   (let ([clnt
          (client
-          shards ; shard ws-clients
+          null ; shard ws-clients
           null ; shard-threads
-          #f ; user
+          #hash() ; user
           #hash() ; event handlers
           http-client
           token
           intents
           (make-semaphore 0))])
+    (set-client-shards!
+     clnt 
+     (map (lambda (n) (new-ws-client clnt n ws-url))
+          (range shard-count)))
     (add-events clnt)
     clnt))
 

@@ -4,7 +4,7 @@
          (struct-out ws-client))
 
 (struct client
-  (shards
+  ([shards #:mutable]
    [shard-threads #:mutable]
    [user #:mutable]
    [events #:mutable]

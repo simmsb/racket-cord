@@ -4,7 +4,7 @@
          (only-in racket/hash hash-union)
          (only-in racket/string string-replace)
          "data.rkt"
-         "private/logger.rkt")
+         "logger.rkt")
 
 (provide add-events
          on-event
@@ -39,10 +39,9 @@
   (let ([session-id (hash-ref data 'session_id)]
         [user (hash-ref data 'user)])
     (set-ws-client-session-id! ws-client session-id)
-    (unless (client-user client)
-      (set-client-user! client user))))
+    (event-user-update ws-client client user)))
 
-(define (event-user-update ws-client client data)
+(define (event-user-update _ws-client client data)
   (let ([merged (hash-union (client-user client) data
                             #:combine (lambda (v1 v2) v2))])
     (set-client-user! client merged)))

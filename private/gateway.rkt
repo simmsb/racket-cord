@@ -2,11 +2,11 @@
 
 (require net/rfc6455
          json
-         (only-in "http.rkt"
+         (only-in "../http.rkt"
                   get-ws-url-infallible)
          "data.rkt"
          "events.rkt"
-         "utils.rkt")
+         "logger.rkt")
 
 (provide new-ws-client
          start-shard

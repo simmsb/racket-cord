@@ -9,8 +9,9 @@
          racket/match
          racket/string
          srfi/19
-         "data.rkt"
-         "utils.rkt")
+         "private/data.rkt"
+         "private/logger.rkt"
+         "private/utils.rkt")
 
 (provide make-http-client
          get-ws-url

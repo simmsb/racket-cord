@@ -18,10 +18,11 @@
          get-ws-url-infallible
          get-ws-url-bot
          (struct-out exn:fail:network:http:discord)
-         attachment?
          (contract-out
-          [attachment
-           (-> bytes? (or/c string? bytes?) (or/c string? bytes?) attachment?)]))
+          [struct attachment
+            ([data bytes?]
+             [type (or/c string? bytes?)]
+             [name (or/c string? bytes?)])]))
 
 (struct exn:fail:network:http:discord exn:fail (http-code discord-code reason) #:transparent)
 (struct attachment (data type name) #:transparent)

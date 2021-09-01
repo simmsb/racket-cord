@@ -11,7 +11,8 @@
          srfi/19
          "private/data.rkt"
          "private/logger.rkt"
-         "private/utils.rkt")
+         "private/utils.rkt"
+         (for-syntax racket/base syntax/parse syntax/datum))
 
 (provide make-http-client
          get-ws-url
@@ -55,33 +56,24 @@
 (struct route
   (method
    path
-   bucket-key
-   channel-id
-   guild-id
-   webhook-id)
+   bucket-key)
   #:transparent)
 
 (define (make-route method
-                    #:channel-id [channel-id null]
-                    #:guild-id [guild-id null]
-                    #:webhook-id [webhook-id null] . path-parts)
+                    #:channel-id [channel-id #f]
+                    #:guild-id [guild-id #f]
+                    #:webhook-id [webhook-id #f]
+                    . path-parts)
   (route
    method
    (apply discord-url path-parts)
-   (format-route method (string-join path-parts) channel-id guild-id webhook-id)
-   channel-id guild-id webhook-id))
+   (format-route method (string-join path-parts) channel-id guild-id webhook-id)))
 
-(define (apply-route http-client route args kws kwargs)
+(define (apply-route http-client route kws kwargs)
   (let ([method (route-method route)]
-        [formatted (foldl (lambda (k s)
-                            (string-replace s (format "{~a}" (car k)) (~a (cdr k))))
-                          (route-path route)
-                          (append (list (cons "channel-id" (route-channel-id route))
-                                        (cons "guild-id"   (route-guild-id route))
-                                        (cons "webhook-id" (route-webhook-id route)))
-                                  args))])
-    (log-discord-debug "applying route: ~a. ~a" formatted (map cons kws kwargs))
-    (keyword-apply (http-client-requester http-client) kws kwargs method formatted '())))
+        [path (route-path route)])
+    (log-discord-debug "applying route: ~a. ~a" path (map cons kws kwargs))
+    (keyword-apply (http-client-requester http-client) kws kwargs method path '())))
 
 (define gateway-params "/?v=8&encoding=json")
 
@@ -124,7 +116,7 @@
 
 (define run-route
   (make-keyword-procedure
-   (lambda (kws kwargs route http-client [args null])
+   (lambda (kws kwargs route http-client)
      (let ([route-key (route-bucket-key route)]
            [global-lock (http-client-global-lock http-client)]
            [ratelimits (http-client-ratelimits http-client)])
@@ -137,7 +129,7 @@
            (let retry ([tries 5])
              (when (<= tries 0)
                (error 'run-route "Ran out of attempts on route: ~a" route-key))
-             (let ([resp (apply-route http-client route args kws kwargs)])
+             (let ([resp (apply-route http-client route kws kwargs)])
                (match resp
                  [(response #:status-code 502)
                   (sleep (* 2 (- 6 tries)))
@@ -173,6 +165,44 @@
                         (sleep delta)))
                     (response-json resp))]))))))))))
 
+(define-syntax (define/endpoint stx)
+  (define-splicing-syntax-class kwarg-pair
+    [pattern (~seq kw:keyword arg:expr)])
+  (define-splicing-syntax-class process-expr
+    #:attributes [wrap]
+    #:literals [=>]
+    [pattern (~seq [=> var:id body:expr])
+             #:attr wrap (lambda (stx) #`(let ([var #,stx]) body))]
+    [pattern (~seq [=> func:expr])
+             #:attr wrap (lambda (stx) #`(func #,stx))]
+    [pattern (~seq)
+             #:attr wrap (lambda (stx) stx)])
+  (syntax-parse stx
+    [(_ (name:id client:id . params)
+        [method path ...]
+        process-expr:process-expr
+        body:expr ...
+        run-args:kwarg-pair ...)
+     (let ()
+       (define (find-param sym)
+         (let loop ([params (syntax-e #'params)])
+           (if (pair? params)
+               (let try-el ([el (syntax-e (car params))])
+                 (cond [(eq? el sym) (car params)]
+                       [(pair? el) (try-el (syntax-e (car el)))]
+                       [else (loop (cdr params))]))
+               #f)))
+       (quasisyntax/loc stx
+         (define (name client . params)
+           body ...
+           #,((datum process-expr.wrap)
+              #`(run-route (make-route method path ...
+                                       #:channel-id #,(find-param 'channel-id)
+                                       #:guild-id #,(find-param 'guild-id)
+                                       #:webhook-id #,(find-param 'webhook-id))
+                           (client-http-client client)
+                           (~@ run-args.kw run-args.arg) ...)))))]))
+
 ;; CHANNEL ENDPOINTS
 
 (provide get-channel modify-channel delete-channel
@@ -185,39 +215,32 @@
          get-pinned-messages add-pinned-channel-message delete-pinned-channel-message
          group-dm-add-recipient group-dm-remove-recipient)
 
-(define (get-channel client channel-id)
-  (run-route (make-route get "channels" "{channel-id}"
-                         #:channel-id channel-id)
-             (client-http-client client)))
+(define/endpoint (get-channel _client channel-id)
+  (get "channels" channel-id))
 
-(define (modify-channel client channel-id data)
-  (run-route (make-route patch "channels" "{channel-id}"
-                         #:channel-id channel-id)
-             (client-http-client client) #:data (json-payload data)))
+(define/endpoint (modify-channel _client channel-id data)
+  (patch "channels" channel-id)
+  #:data (json-payload data))
 
-(define (delete-channel client channel-id)
-  (run-route (make-route delete "channels" "{channel-id}"
-                         #:channel-id channel-id)
-             (client-http-client client)))
+(define/endpoint (delete-channel _client channel-id)
+  (delete "channels" channel-id))
 
-(define (get-channel-messages client channel-id . params)
-  (run-route (make-route get "channels" "{channel-id}" "messages"
-                         #:channel-id channel-id)
-             (client-http-client client) #:params params))
+(define/endpoint (get-channel-messages _client channel-id . params)
+  (get "channels" channel-id "messages")
+  #:params params)
 
-(define (get-channel-message client channel-id message-id)
-  (run-route
-   (make-route get "channels" "{channel-id}" "messages" "{message-id}"
-               #:channel-id channel-id)
-   (client-http-client client) `((message-id . ,message-id))))
+(define/endpoint (get-channel-message _client channel-id message-id)
+  (get "channels" channel-id "messages" message-id))
 
-(define (create-message client channel-id
-                        [content ""]
-                        #:allowed-mentions [mentions #f]
-                        #:reply-to [reference #f]
-                        #:embed [embed #f]
-                        #:tts [tts #f]
-                        #:file [attachment #f])
+(define/endpoint (create-message _client channel-id
+                                 [content ""]
+                                 #:allowed-mentions [mentions #f]
+                                 #:reply-to [reference #f]
+                                 #:embed [embed #f]
+                                 #:tts [tts #f]
+                                 #:file [attachment #f])
+  (post "channels" channel-id "messages")
+  #:data
   (let ([data (make-hash)])
     (when embed
       (hash-set! data 'embed embed))
@@ -227,160 +250,119 @@
       (hash-set! data 'allowed_mentions mentions))
     (hash-set! data 'tts tts)
     (hash-set! data 'content content)
-    (run-route (make-route post "channels" "{channel-id}" "messages" #:channel-id channel-id)
-               (client-http-client client)
-               #:data
-               (if attachment
-                   (multipart-payload
-                    (file-part "file"
-                               (open-input-bytes (attachment-data attachment))
-                               (attachment-name attachment)
-                               (attachment-type attachment))
-                    (field-part "payload_json" (jsexpr->string data) #"application/json"))
-                   (json-payload data)))))
+    (if attachment
+        (multipart-payload
+         (file-part "file"
+                    (open-input-bytes (attachment-data attachment))
+                    (attachment-name attachment)
+                    (attachment-type attachment))
+         (field-part "payload_json" (jsexpr->string data) #"application/json"))
+        (json-payload data))))
 
-(define (edit-message client channel-id message-id #:content [content null] #:embed [embed null])
-  (run-route (make-route patch "channels" "{channel-id}" "messages" "{message-id}"
-                         #:channel-id channel-id)
-             (client-http-client client) `((message-id . ,message-id))
-             #:params (filter-null `((content . ,content)
-                                     (embed . ,embed)))))
+(define/endpoint (edit-message _client
+                               channel-id
+                               message-id
+                               #:content [content null]
+                               #:embed [embed null])
+  (patch "channels" channel-id "messages" message-id)
+  #:params (filter-null `((content . ,content) (embed . ,embed))))
 
-(define (delete-message client channel-id message-id)
-  (run-route (make-route delete "channels" "{channel-id}" "messages" "{message-id}"
-                         #:channel-id channel-id)
-             (client-http-client client) `((message-id . ,message-id))))
+(define/endpoint (delete-message _client channel-id message-id)
+  (delete "channels" channel-id "messages" message-id))
 
-(define (create-reaction client channel-id message-id emoji)
-  (run-route (make-route post "channels" "{channel-id}" "messages" "{message-id}" "reactions" "{emoji}" "@me"
-                         #:channel-id channel-id)
-             (client-http-client client) `((message-id . ,message-id) (emoji . ,emoji))))
+(define/endpoint (create-reaction _client channel-id message-id emoji)
+  (post "channels" channel-id "messages" message-id "reactions" emoji "@me"))
 
-(define (delete-own-reaction client channel-id message-id emoji)
-  (run-route (make-route delete "channels" "{channel-id}" "messages" "{message-id}" "reactions" "{emoji}" "@me"
-                         #:channel-id channel-id)
-             (client-http-client client) `((message-id . ,message-id) (emoji . ,emoji))))
+(define/endpoint (delete-own-reaction _client channel-id message-id emoji)
+  (delete "channels" channel-id "messages" message-id "reactions" emoji "@me"))
 
-(define (delete-user-reaction client channel-id message-id emoji user-id)
-  (run-route (make-route delete "channels" "{channel-id}" "messages" "{message-id}" "reactions" "{emoji}" "{user-id}"
-                         #:channel-id channel-id)
-             (client-http-client client) `((message-id . ,message-id) (emoji . ,emoji) (user-id . ,user-id))))
+(define/endpoint (delete-user-reaction _client channel-id message-id emoji user-id)
+  (delete "channels" channel-id "messages" message-id "reactions" emoji user-id))
 
-(define (get-reactions client channel-id message-id emoji . params)
-  (run-route (make-route get "channels" "{channel-id}" "messages" "{message-id}" "reactions" "{emoji}"
-                         #:channel-id channel-id)
-             (client-http-client client) `((message-id . ,message-id) (emoji . ,emoji))
-             #:params params))
+(define/endpoint (get-reactions _client channel-id message-id emoji . params)
+  (get "channels" channel-id "messages" message-id "reactions" emoji)
+  #:params params)
 
-(define (delete-all-reactions client channel-id message-id)
-  (run-route (make-route delete "channels" "{channel-id}" "messages" "{message-id}"
-                         #:channel-id channel-id)
-             (client-http-client client) `((message-id . ,message-id))))
+(define/endpoint (delete-all-reactions _client channel-id message-id)
+  (delete "channels" channel-id "messages" message-id))
 
-(define (bulk-delete-messages client channel-id . ids)
-  (run-route (make-route post "channels" "{channel-id}" "messages" "bulk-delete"
-                         #:channel-id channel-id)
-             (client-http-client client) #:data (json-payload (hash 'messages ids))))
+(define/endpoint (bulk-delete-messages _client channel-id . ids)
+  (post "channels" channel-id "messages" "bulk-delete")
+  #:data (json-payload (hash 'messages ids)))
 
-(define (edit-channel-permissions client channel-id overwrite-id allow deny type)
-  (run-route (make-route put "channels" "{channel-id}" "permissions" "{overwrite-id}"
-                         #:channel-id channel-id)
-             (client-http-client client) `((overwrite-id . ,overwrite-id))
-             #:data (json-payload
-                     (hash 'allow allow
-                           'deny deny
-                           'type type))))
+(define/endpoint (edit-channel-permissions _client channel-id overwrite-id allow deny type)
+  (put "channels" channel-id "permissions" overwrite-id)
+  #:data (json-payload
+          (hash 'allow allow
+                'deny deny
+                'type type)))
 
-(define (get-channel-invites client channel-id)
-  (run-route (make-route get "channels" "{channel-id}" "invites"
-                         #:channel-id channel-id)
-             (client-http-client client)))
+(define/endpoint (get-channel-invites _client channel-id)
+  (get "channels" channel-id "invites"))
 
-(define (create-channel-invite client channel-id [age 86400] [uses 0] [temporary #f] [unique #f])
-  (run-route (make-route post "channels" "{channel-id}" "invites"
-                         #:channel-id channel-id)
-             (client-http-client client) #:data (json-payload
-                                                 (hash 'max_age age
-                                                       'max_uses uses
-                                                       'temporary temporary
-                                                       'unique unique))))
+(define/endpoint (create-channel-invite _client
+                                        channel-id
+                                        [age 86400]
+                                        [uses 0]
+                                        [temporary #f]
+                                        [unique #f])
+  (post "channels" channel-id "invites")
+  #:data (json-payload
+          (hash 'max_age age
+                'max_uses uses
+                'temporary temporary
+                'unique unique)))
 
-(define (delete-channel-permission client channel-id overwrite-id)
-  (run-route (make-route delete "channels" "{channel-id}" "permissions" "{overwrite-id}"
-                         #:channel-id channel-id)
-             (client-http-client client) `((overwrite-id . ,overwrite-id))))
+(define/endpoint (delete-channel-permission _client channel-id overwrite-id)
+  (delete "channels" channel-id "permissions" overwrite-id))
 
-(define (trigger-typing-indicator client channel-id)
-  (run-route (make-route post "channels" "{channel-id}" "typing"
-                         #:channel-id channel-id)
-             (client-http-client client)))
+(define/endpoint (trigger-typing-indicator _client channel-id)
+  (post "channels" channel-id "typing"))
 
-(define (get-pinned-messages client channel-id)
-  (run-route (make-route get "channels" "{channel-id}" "pins"
-                         #:channel-id channel-id)
-             (client-http-client client)))
+(define/endpoint (get-pinned-messages _client channel-id)
+  (get "channels" channel-id "pins"))
 
-(define (add-pinned-channel-message client channel-id message-id)
-  (run-route (make-route put "channels" "{channel-id}" "pins" "{message-id}"
-                         #:channel-id channel-id)
-             (client-http-client client) `((message-id . ,message-id))))
+(define/endpoint (add-pinned-channel-message _client channel-id message-id)
+  (put "channels" channel-id "pins" message-id))
 
-(define (delete-pinned-channel-message client channel-id message-id)
-  (run-route (make-route delete "channels" "{channel-id}" "pins" "{message-id}"
-                         #:channel-id channel-id)
-             (client-http-client client) `((message-id . ,message-id))))
+(define/endpoint (delete-pinned-channel-message _client channel-id message-id)
+  (delete "channels" channel-id "pins" message-id))
 
-(define (group-dm-add-recipient client channel-id user-id access-token nick)
-  (run-route (make-route put "channels" "{channel-id}" "recipients" "{user-id}"
-                         #:channel-id channel-id)
-             (client-http-client client) `((user-id . ,user-id))
-             #:data (json-payload
-                     (hash 'access_token access-token
-                           'nick nick))))
+(define/endpoint (group-dm-add-recipient _client channel-id user-id access-token nick)
+  (put "channels" channel-id "recipients" user-id)
+  #:data (json-payload
+          (hash 'access_token access-token
+                'nick nick)))
 
-(define (group-dm-remove-recipient client channel-id user-id)
-  (run-route (make-route delete "channels" "{channel-id}" "recipients" "{user-id}"
-                         #:channel-id channel-id)
-             (client-http-client client) `((channel-id . ,channel-id))))
-
+(define/endpoint (group-dm-remove-recipient _client channel-id user-id)
+  (delete "channels" channel-id "recipients" user-id))
 
 ;; EMOJI ENDPOINTS
 
 (provide list-guild-emoji get-guild-emoji create-guild-emoji
          modify-guild-emoji delete-guild-emoji)
 
-(define (list-guild-emoji client guild-id)
-  (run-route (make-route get "guilds" "{guild-id}" "emojis"
-                         #:guild-id guild-id)
-             (client-http-client client)))
+(define/endpoint (list-guild-emoji _client guild-id)
+  (get "guilds" guild-id "emojis"))
 
-(define (get-guild-emoji client guild-id emoji-id)
-  (run-route (make-route get "guilds" "{guild-id}" "emojis" "{emoji-id}"
-                         #:guild-id guild-id)
-             (client-http-client client) `((emoji-id . ,emoji-id))))
+(define/endpoint (get-guild-emoji _client guild-id emoji-id)
+  (get "guilds" guild-id "emojis" emoji-id))
 
+(define/endpoint (create-guild-emoji _client guild-id name image image-type roles)
+  (post "guilds" guild-id "emojis")
+  #:data (json-payload
+          (hash 'name name
+                'image (image-data->base64 image-type image)
+                'roles roles)))
 
-(define (create-guild-emoji client guild-id name image image-type roles)
-  (run-route (make-route post "guilds" "{guild-id}" "emojis"
-                         #:guild-id guild-id)
-             (client-http-client client) #:data (json-payload
-                                                 (hash 'name name
-                                                       'image (image-data->base64 image-type image)
-                                                       'roles roles))))
+(define/endpoint (modify-guild-emoji _client guild-id emoji-id name roles)
+  (patch "guilds" guild-id "emojis" emoji-id)
+  #:data (json-payload
+          (hash 'name name
+                'roles roles)))
 
-(define (modify-guild-emoji client guild-id emoji-id name roles)
-  (run-route (make-route patch "guilds" "{guild-id}" "emojis" "{emoji-id}"
-                         #:guild-id guild-id)
-             (client-http-client client) `((emoji-id . ,emoji-id))
-             #:data (json-payload
-                     (hash 'name name
-                           'roles roles))))
-
-(define (delete-guild-emoji client guild-id emoji-id)
-  (run-route (make-route delete "guilds" "{guild-id}" "emojis" "{emoji-id}"
-                         #:guild-id guild-id)
-             (client-http-client client) `((emoji-id . ,emoji-id))))
-
+(define/endpoint (delete-guild-emoji _client guild-id emoji-id)
+  (delete "guilds" guild-id "emojis" emoji-id))
 
 ;; GUILD ENDPOINTS
 
@@ -396,182 +378,121 @@
          get-guild-integrations create-guild-integration modify-guild-integration delete-guild-integrations sync-guild-integrations
          get-guild-embed modify-guild-embed)
 
-(define (get-guild client guild-id)
-  (run-route (make-route get "guilds" "{guild-id}"
-                         #:guild-id guild-id)
-             (client-http-client client)))
+(define/endpoint (get-guild _client guild-id)
+  (get "guilds" guild-id))
 
-(define (modify-guild client guild-id data)
-  (run-route (make-route patch "guilds" "{guild-id}"
-                         #:guild-id guild-id)
-             (client-http-client client) #:data (json-payload data)))
+(define/endpoint (modify-guild _client guild-id data)
+  (patch "guilds" guild-id)
+  #:data (json-payload data))
 
-(define (delete-guild client guild-id)
-  (run-route (make-route delete "guilds" "{guild-id}"
-                         #:guild-id guild-id)
-             (client-http-client client)))
+(define/endpoint (delete-guild _client guild-id)
+  (delete "guilds" guild-id))
 
-(define (get-guild-channels client guild-id)
-  (run-route (make-route get "guilds" "{guild-id}" "channels"
-                         #:guild-id guild-id)
-             (client-http-client client)))
+(define/endpoint (get-guild-channels _client guild-id)
+  (get "guilds" guild-id "channels"))
 
-(define (create-guild-channel client guild-id data)
-  (run-route
-   (make-route post "guilds" "{guild-id}" "channnels"
-               #:guild-id guild-id)
-   (client-http-client client) #:data (json-payload data)))
+(define/endpoint (create-guild-channel _client guild-id data)
+  (post "guilds" guild-id "channnels")
+  #:data (json-payload data))
 
-(define (modify-guild-channel-permissions client guild-id data)
-  (run-route (make-route patch "guilds" "{guild-id}" "channels"
-                         #:guild-id guild-id)
-             (client-http-client client) #:data (json-payload data)))
+(define/endpoint (modify-guild-channel-permissions _client guild-id data)
+  (patch "guilds" guild-id "channels")
+  #:data (json-payload data))
 
-(define (get-guild-member client guild-id user-id)
-  (run-route
-   (make-route get "guilds" "{guild-id}" "members" "{user-id}"
-               #:guild-id guild-id)
-   (client-http-client client) `((user-id . ,user-id))))
+(define/endpoint (get-guild-member _client guild-id user-id)
+  (get "guilds" guild-id "members" user-id))
 
-(define (list-guild-members client guild-id #:limit [limit 1] #:after [after 0])
-  (run-route (make-route get "guilds" "{guild-id}" "members"
-                         #:guild-id guild-id)
-             (client-http-client client)
-             #:params `((limit . ,limit) (after . ,after))))
+(define/endpoint (list-guild-members _client guild-id #:limit [limit 1] #:after [after 0])
+  (get "guilds" guild-id "members")
+  #:params `((limit . ,limit) (after . ,after)))
 
-(define (add-guild-member client guild-id user-id data)
-  (run-route
-   (make-route put "guilds" "{guild-id}" "members" "{user-id}"
-               #:guild-id guild-id)
-   (client-http-client client) `((user-id . ,user-id))
-   #:data (json-payload data)))
+(define/endpoint (add-guild-member _client guild-id user-id data)
+  (put "guilds" guild-id "members" user-id)
+  #:data (json-payload data))
 
-(define (modify-guild-member client guild-id user-id data)
-  (run-route (make-route patch "guilds" "{guild-id}" "members" "{guild-id}"
-                         #:guild-id guild-id)
-             (client-http-client client) `((user-id . ,user-id))
-             #:data (json-payload data)))
+(define/endpoint (modify-guild-member _client guild-id user-id data)
+  (patch "guilds" guild-id "members" guild-id)
+  #:data (json-payload data))
 
-(define (modify-user-nick client guild-id nick)
-  (run-route (make-route patch "guilds" "{guild-id}" "members" "@me" "nick"
-                         #:guild-id guild-id)
-             (client-http-client client) #:data (json-payload (hash 'nick nick))))
+(define/endpoint (modify-user-nick _client guild-id nick)
+  (patch "guilds" guild-id "members" "@me" "nick")
+  #:data (json-payload (hash 'nick nick)))
 
-(define (add-guild-member-role client guild-id user-id role-id)
-  (run-route (make-route put "guilds" "{guild-id}" "members" "{user-id}" "roles" "{role-id}"
-                         #:guild-id guild-id)
-             (client-http-client client) `((user-id . ,user-id) (role-id . ,role-id))))
+(define/endpoint (add-guild-member-role _client guild-id user-id role-id)
+  (put "guilds" guild-id "members" user-id "roles" role-id))
 
-(define (remove-guild-member-role client guild-id user-id role-id)
-  (run-route (make-route delete "guilds" "{guild-id}" "members" "{user-id}" "roles" "{role-id}"
-                         #:guild-id guild-id)
-             (client-http-client client) `((user-id . ,user-id) (role-id . ,role-id))))
+(define/endpoint (remove-guild-member-role _client guild-id user-id role-id)
+  (delete "guilds" guild-id "members" user-id "roles" role-id))
 
-(define (remove-guild-member client guild-id user-id)
-  (run-route (make-route delete "guilds" "{guild-id}" "members" "{user-id}"
-                         #:guild-id guild-id)
-             (client-http-client client) `((user-id . ,user-id))))
+(define/endpoint (remove-guild-member _client guild-id user-id)
+  (delete "guilds" guild-id "members" user-id))
 
-(define (get-guild-bans client guild-id)
-  (run-route (make-route get "guilds" "{guild-id}" "bans"
-                         #:guild-id guild-id)
-             (client-http-client client)))
+(define/endpoint (get-guild-bans _client guild-id)
+  (get "guilds" guild-id "bans"))
 
-(define (create-guild-ban client guild-id user-id [days 1])
-  (run-route (make-route put "guilds" "{guild-id}" "bans" "{user-id}"
-                         #:guild-id guild-id)
-             (client-http-client client) `((user-id . ,user-id))
-             #:params `((delete-message-days . ,days))))
+(define/endpoint (create-guild-ban _client guild-id user-id [days 1])
+  (put "guilds" guild-id "bans" user-id)
+  #:params `((delete-message-days . ,days)))
 
-(define (remove-guild-ban client guild-id user-id)
-  (run-route (make-route delete "guilds" "{guild-id}" "bans" "{user-id}"
-                         #:guild-id guild-id)
-             (client-http-client client) `((user-id . ,user-id))))
+(define/endpoint (remove-guild-ban _client guild-id user-id)
+  (delete "guilds" guild-id "bans" user-id))
 
-(define (get-guild-roles client guild-id)
-  (run-route (make-route get "guilds" "{guild-id}" "roles"
-                         #:guild-id guild-id)
-             (client-http-client client)))
+(define/endpoint (get-guild-roles _client guild-id)
+  (get "guilds" guild-id "roles"))
 
-(define (create-guild-role client guild-id data)
-  (run-route (make-route post "guilds" "{guild-id}" "roles"
-                         #:guild-id guild-id)
-             (client-http-client client) #:data (json-payload data)))
+(define/endpoint (create-guild-role _client guild-id data)
+  (post "guilds" guild-id "roles")
+  #:data (json-payload data))
 
-(define (modify-guild-role-positions client guild-id data)
-  (run-route (make-route patch "guilds" "{guild-id}" "roles"
-                         #:guild-id guild-id)
-             (client-http-client client) #:data (json-payload data)))
+(define/endpoint (modify-guild-role-positions _client guild-id data)
+  (patch "guilds" guild-id "roles")
+  #:data (json-payload data))
 
-(define (modify-guild-role client guild-id role-id data)
-  (run-route
-   (make-route patch "guilds" "{guild-id}" "roles" "{role-id}"
-               #:guild-id guild-id)
-   (client-http-client client) `((role-id . ,role-id))
-   #:data (json-payload data)))
+(define/endpoint (modify-guild-role _client guild-id role-id data)
+  (patch "guilds" guild-id "roles" role-id)
+  #:data (json-payload data))
 
-(define (delete-guild-role client guild-id role-id)
-  (run-route (make-route delete "guilds" "{guild-id}" "roles" "{guild-id}"
-                         #:guild-id guild-id)
-             (client-http-client client) `((role-id . ,role-id))))
+(define/endpoint (delete-guild-role _client guild-id role-id)
+  (delete "guilds" guild-id "roles" guild-id))
 
-(define (get-guild-prune-count client guild-id days)
-  (hash-ref (run-route (make-route get "guilds" "{guild-id}" "prune"
-                                   #:guild-id guild-id)
-                       (client-http-client client)
-                       #:params `((days . ,days)))
-            'pruned))
+(define/endpoint (get-guild-prune-count _client guild-id days)
+  (get "guilds" guild-id "prune")
+  [=> x (hash-ref x 'pruned)]
+  #:params `((days . ,days)))
 
-(define (begin-guild-prune client guild-id days)
-  (hash-ref (run-route (make-route post "guilds" "{guild-id}" "prune"
-                                   #:guild-id guild-id)
-                       (client-http-client client)
-                       #:params `((days . ,days)))
-            'pruned))
+(define/endpoint (begin-guild-prune _client guild-id days)
+  (post "guilds" guild-id "prune")
+  [=> x (hash-ref x 'pruned)]
+  #:params `((days . ,days)))
 
 ;; Would be here: voice regions
 
-(define (get-guild-invites client guild-id)
-  (run-route (make-route get "guilds" "{guild-id}" "invites"
-                         #:guild-id guild-id)
-             (client-http-client client)))
+(define/endpoint (get-guild-invites _client guild-id)
+  (get "guilds" guild-id "invites"))
 
-(define (get-guild-integrations client guild-id)
-  (run-route (make-route get "guilds" "{guild-id}" "integrations"
-                         #:guild-id guild-id)
-             (client-http-client client)))
+(define/endpoint (get-guild-integrations _client guild-id)
+  (get "guilds" guild-id "integrations"))
 
-(define (create-guild-integration client guild-id type id)
-  (run-route (make-route post "guilds" "{guild-id}" "integrations"
-                         #:guild-id guild-id)
-             (client-http-client client) #:data (json-payload
-                                                 (hash 'type type 'id id))))
+(define/endpoint (create-guild-integration _client guild-id type id)
+  (post "guilds" guild-id "integrations")
+  #:data (json-payload (hash 'type type 'id id)))
 
-(define (modify-guild-integration client guild-id integration-id data)
-  (run-route (make-route patch "guilds" "{guild-id}" "integrations" "{integration-id}"
-                         #:guild-id guild-id)
-             (client-http-client client) `((integration-id . ,integration-id))
-             #:data (json-payload data)))
+(define/endpoint (modify-guild-integration _client guild-id integration-id data)
+  (patch "guilds" guild-id "integrations" integration-id)
+  #:data (json-payload data))
 
-(define (delete-guild-integrations client guild-id integration-id)
-  (run-route (make-route delete "guilds" "{guild-id}" "integrations" "{integration-id}"
-                         #:guild-id guild-id)
-             (client-http-client client) `((integration-id . ,integration-id))))
+(define/endpoint (delete-guild-integrations _client guild-id integration-id)
+  (delete "guilds" guild-id "integrations" integration-id))
 
-(define (sync-guild-integrations client guild-id integration-id)
-  (run-route (make-route post "guilds" "{guild-id}" "integrations" "{integration-id}" "sync"
-                         #:guild-id guild-id)
-             (client-http-client client) `((integration-id . ,integration-id))))
+(define/endpoint (sync-guild-integrations _client guild-id integration-id)
+  (post "guilds" guild-id "integrations" integration-id "sync"))
 
-(define (get-guild-embed client guild-id)
-  (run-route (make-route get "guilds" "{guild-id}" "embed"
-                         #:guild-id guild-id)
-             (client-http-client client)))
+(define/endpoint (get-guild-embed _client guild-id)
+  (get "guilds" guild-id "embed"))
 
-(define (modify-guild-embed client guild-id data)
-  (run-route (make-route patch "guilds" "{guild-id}" "embed"
-                         #:guild-id guild-id)
-             (client-http-client client) #:data (json-payload data)))
+(define/endpoint (modify-guild-embed _client guild-id data)
+  (patch "guilds" guild-id "embed")
+  #:data (json-payload data))
 
 ;; USER ENDPOINTS
 
@@ -579,52 +500,44 @@
          get-current-user-guilds leave-guild
          get-user-dms create-dm create-group-dm)
 
-(define (get-current-user client)
-  (run-route (make-route get "users" "@me")
-             (client-http-client client)))
+(define/endpoint (get-current-user _client)
+  (get "users" "@me"))
 
-(define (get-user client user-id)
-  (run-route (make-route get "users" "{user-id}")
-             (client-http-client client) `((user-id . ,user-id))))
+(define/endpoint (get-user _client user-id)
+  (get "users" user-id))
 
-(define (modify-current-user client #:username [username null] #:avatar [avatar null] #:avatar-type [avatar-type ""])
-  (run-route (make-route patch "users" "@me")
-             (client-http-client client)
-             #:data (json-payload (hash-exclude-null
-                                   'username username
-                                   'avatar (if (null? avatar) null (image-data->base64 avatar-type avatar))))))
+(define/endpoint (modify-current-user _client
+                                      #:username [username null]
+                                      #:avatar [avatar null]
+                                      #:avatar-type [avatar-type ""])
+  (patch "users" "@me")
+  #:data (json-payload (hash-exclude-null
+                        'username username
+                        'avatar (if (null? avatar) null (image-data->base64 avatar-type avatar)))))
 
-(define (get-current-user-guilds client
-                                 #:before [before null]
-                                 #:after [after null]
-                                 #:limit [limit null])
-  (run-route (make-route get "users" "@me" "guilds")
-             (client-http-client client)
-             #:params (filter-null `((before . ,before)
-                                     (after . ,after)
-                                     (limit . ,limit)))))
+(define/endpoint (get-current-user-guilds client
+                                          #:before [before null]
+                                          #:after [after null]
+                                          #:limit [limit null])
+  (get "users" "@me" "guilds")
+  #:params (filter-null `((before . ,before)
+                          (after . ,after)
+                          (limit . ,limit))))
 
 
-(define (leave-guild client guild-id)
-  (run-route (make-route delete "users" "@me" "guilds" "{guild-id}"
-                         #:guild-id guild-id)
-             (client-http-client client)))
+(define/endpoint (leave-guild _client guild-id)
+  (delete "users" "@me" "guilds" guild-id))
 
-(define (get-user-dms client)
-  (run-route (make-route get "users" "@me" "channels")
-             (client-http-client client)))
+(define/endpoint (get-user-dms _client)
+  (get "users" "@me" "channels"))
 
-(define (create-dm client recipient-id)
-  (run-route
-   (make-route post "users" "@me" "channels")
-   (client-http-client client)
-   #:data (json-payload (hash 'recipient_id recipient-id))))
+(define/endpoint (create-dm _client recipient-id)
+  (post "users" "@me" "channels")
+  #:data (json-payload (hash 'recipient_id recipient-id)))
 
-(define (create-group-dm client data)
-  (run-route
-   (make-route post "users" "@me" "channels")
-   (client-http-client client)
-   #:data (json-payload data)))
+(define/endpoint (create-group-dm _client data)
+  (post "users" "@me" "channels")
+  #:data (json-payload data))
 
 ;; WEBHOOK ENDPOINTS
 (provide create-webhook
@@ -634,78 +547,56 @@
          delete-webhook delete-webhook-with-token
          execute-webhook)
 
-(define (create-webhook client channel-id name avatar avatar-type)
-  (run-route
-   (make-route post "channels" "{channel-id}" "webhooks"
-               #:channel-id channel-id)
-   (client-http-client client)
-   #:data (json-payload (hash
-                         'name name
-                         'avatar (image-data->base64 avatar-type avatar)))))
+(define/endpoint (create-webhook _client channel-id name avatar avatar-type)
+  (post "channels" channel-id "webhooks")
+  #:data (json-payload (hash
+                        'name name
+                        'avatar (image-data->base64 avatar-type avatar))))
 
-(define (get-channel-webhooks client channel-id)
-  (run-route (make-route get "channels" "{channel-id}" "webhooks"
-                         #:channel-id channel-id)
-             (client-http-client client)))
+(define/endpoint (get-channel-webhooks _client channel-id)
+  (get "channels" channel-id "webhooks"))
 
-(define (get-guild-webhooks client guild-id)
-  (run-route (make-route get "guilds" "{guild-id}" "webhooks"
-                         #:guild-id guild-id)
-             (client-http-client client)))
+(define/endpoint (get-guild-webhooks _client guild-id)
+  (get "guilds" guild-id "webhooks"))
 
-(define (get-webhook client webhook-id)
-  (run-route
-   (make-route get "webhooks" "{webhook-id}"
-               #:webhook-id webhook-id)
-   (client-http-client client)))
+(define/endpoint (get-webhook _client webhook-id)
+  (get "webhooks" webhook-id))
 
-(define (get-webhook-with-token client webhook-id webhook-token)
-  (run-route
-   (make-route get "webhooks" "{webhook-id}" "{webhook-token}"
-               #:webhook-id webhook-id)
-   (client-http-client client) `((webhook-token . ,webhook-token))))
+(define/endpoint (get-webhook-with-token _client webhook-id webhook-token)
+  (get "webhooks" webhook-id webhook-token))
 
-(define (modify-webhook client webhook-id
-                        #:name [name null]
-                        #:avatar [avatar null]
-                        #:avatar-type [avatar-type ""]
-                        #:channel-id [channel-id null])
-  (run-route
-   (make-route patch "webhooks" "{webhook-id}"
-               #:webhook-id webhook-id)
-   (client-http-client client)
-   #:data (json-payload (hash-exclude-null
-                         'name name
-                         'avatar (if (null? avatar) null (image-data->base64 avatar-type avatar))
-                         'channel_id channel-id))))
+(define/endpoint (modify-webhook _client
+                                 webhook-id
+                                 #:name [name null]
+                                 #:avatar [avatar null]
+                                 #:avatar-type [avatar-type ""]
+                                 #:channel-id [channel-id null])
+  (patch "webhooks" webhook-id)
+  #:data (json-payload (hash-exclude-null
+                        'name name
+                        'avatar (if (null? avatar) null (image-data->base64 avatar-type avatar))
+                        'channel_id channel-id)))
 
-(define (modify-webhook-with-token client webhook-id token
-                                   #:name [name null]
-                                   #:avatar [avatar null]
-                                   #:avatar-type [avatar-type ""]
-                                   #:channel-id [channel-id null])
-  (run-route
-   (make-route patch "webhooks" "{webhook-id}"
-               #:webhook-id webhook-id)
-   (client-http-client client)
-   #:data (json-payload (hash-exclude-null
-                         'name name
-                         'avatar (if (null? avatar) null (image-data->base64 avatar-type avatar))
-                         'channel_id channel-id))))
+(define/endpoint (modify-webhook-with-token _client
+                                            webhook-id
+                                            token
+                                            #:name [name null]
+                                            #:avatar [avatar null]
+                                            #:avatar-type [avatar-type ""]
+                                            #:channel-id [channel-id null])
+  (patch "webhooks" webhook-id)
+  #:data (json-payload (hash-exclude-null
+                        'name name
+                        'avatar (if (null? avatar) null (image-data->base64 avatar-type avatar))
+                        'channel_id channel-id)))
 
-(define (delete-webhook client webhook-id)
-  (run-route (make-route delete "webhooks" "{webhook-id}"
-                         #:webhook-id webhook-id)
-             (client-http-client client)))
+(define/endpoint (delete-webhook _client webhook-id)
+  (delete "webhooks" webhook-id))
 
-(define (delete-webhook-with-token client webhook-id webhook-token)
-  (run-route (make-route delete "webhooks" "{webhook-id}" "{webhook-token}"
-                         #:webhook-id webhook-id)
-             (client-http-client client) `((webhook-token . ,webhook-token))))
+(define/endpoint (delete-webhook-with-token _client webhook-id webhook-token)
+  (delete "webhooks" webhook-id webhook-token))
 
-(define (execute-webhook client webhook-id webhook-token data #:wait [wait #f])
-  (run-route (make-route post "webhooks" "{webhook-id}" "{webhook-token}"
-                         #:webhook-id webhook-id)
-             (client-http-client client)
-             #:params `((wait . ,wait))
-             #:data (json-payload data)))
+(define/endpoint (execute-webhook _client webhook-id webhook-token data #:wait [wait #f])
+  (post "webhooks" webhook-id webhook-token)
+  #:params `((wait . ,wait))
+  #:data (json-payload data))

@@ -7,8 +7,6 @@
          racket/format
          racket/function
          racket/match
-         racket/string
-         srfi/19
          "private/data.rkt"
          "private/logger.rkt"
          "private/utils.rkt"
@@ -41,41 +39,35 @@
 
 (struct http-client
   (requester
-   global-lock
+   global-limit
    ratelimits))
 
 (define (make-http-client token)
   (http-client
    (make-discord-http token)
-   (make-semaphore 1)
+   (box always-evt)
    (make-hash)))
 
-(define (format-route method path channel-id guild-id webhook-id)
-  (format "~a|~a|~a|~a|~a" method path channel-id guild-id webhook-id))
+(define (discord-url . parts)
+  (apply ~a "/api/v8" parts #:separator "/"))
 
-(struct route
-  (method
-   path
-   bucket-key)
-  #:transparent)
+(define gateway-params "/?v=8&encoding=json")
 
-(define (make-route method
-                    #:channel-id [channel-id #f]
-                    #:guild-id [guild-id #f]
-                    #:webhook-id [webhook-id #f]
-                    . path-parts)
-  (route
-   method
-   (apply discord-url path-parts)
-   (format-route method (string-join path-parts) channel-id guild-id webhook-id)))
+(struct route (method method-name path) #:transparent
+  #:methods gen:custom-write
+  [(define (write-proc route port _mode)
+     (display (route-method-name route) port)
+     (display ":" port)
+     (display (route-path route) port))])
+
+(define (make-route method method-name . path-parts)
+  (route method method-name (apply discord-url path-parts)))
 
 (define (apply-route http-client route kws kwargs)
   (let ([method (route-method route)]
         [path (route-path route)])
-    (log-discord-debug "applying route: ~a. ~a" path (map cons kws kwargs))
+    (log-discord-debug "applying route: ~a ~a" route (map cons kws kwargs))
     (keyword-apply (http-client-requester http-client) kws kwargs method path '())))
-
-(define gateway-params "/?v=8&encoding=json")
 
 (define (get-ws-url http-client)
   (let ([resp ((http-client-requester http-client)
@@ -108,62 +100,72 @@
        (error (~a "http error\n"
                   "  response: " (bytes->string/utf-8 body)))])))
 
-(define (discord-url . parts)
-  (format "/api/v8/~a" (string-join parts "/")))
-
-(define (rfc2822->unix-seconds s)
-  (time-second (date->time-utc (string->date s "~a, ~d ~b ~Y ~H:~M:~S"))))
-
 (define run-route
   (make-keyword-procedure
    (lambda (kws kwargs route http-client)
-     (let ([route-key (route-bucket-key route)]
-           [global-lock (http-client-global-lock http-client)]
-           [ratelimits (http-client-ratelimits http-client)])
-       (semaphore-wait global-lock)
-       (semaphore-post global-lock)
-       (let ([lock (hash-ref! ratelimits route-key (thunk (make-semaphore 1)))])
-         (call-with-semaphore
-          lock
-          (thunk
-           (let retry ([tries 5])
-             (when (<= tries 0)
-               (error 'run-route "Ran out of attempts on route: ~a" route-key))
-             (let ([resp (apply-route http-client route kws kwargs)])
-               (match resp
-                 [(response #:status-code 502)
-                  (sleep (* 2 (- 6 tries)))
-                  (retry (sub1 tries))]
-                 [(response #:body body
-                            #:headers ([Retry-After retry])
-                            #:status-code 429)
-                  (let ([retry-after (/ (string->number retry) 1000)]
-                        [globally (hash-ref (response-json resp) 'global #f)])
-                    (log-discord-info "Hit 429 ratelimit ~a retrying in ~a seconds" route-key retry-after)
-                    (if globally
-                        (call-with-semaphore global-lock (thunk (sleep retry-after)))
-                        (sleep retry-after)))]
-                 [(response #:body body
-                            #:status-code code)
-                  #:when (>= code 400)
-                  (let ([json (response-json resp)])
-                    (raise (exn:fail:network:http:discord
-                            (format "Discord gave us an error: ~a" body)
-                            (current-continuation-marks) code
-                            (hash-ref json 'code null)
-                            (hash-ref json 'message null))))]
-                 [_
-                  (let* ([remaining ((compose string->number bytes->string/utf-8)
-                                     (or (response-headers-ref resp 'X-Ratelimit-Remaining) #"0"))]
-                         [reset ((compose string->number bytes->string/utf-8)
-                                 (or (response-headers-ref resp 'X-Ratelimit-Reset) #"0"))]
-                         [date ((compose rfc2822->unix-seconds bytes->string/utf-8)
-                                (response-headers-ref resp 'Date))])
-                    (when (<= remaining 0)
-                      (let ([delta (max 0 (- reset date))])
-                        (log-discord-info "Sleeping on ratelimit ~a for ~a seconds" route-key delta)
-                        (sleep delta)))
-                    (response-json resp))]))))))))))
+     ;; Rate limits are implemented using events,
+     ;; that are usually ready if and only if the route is ready
+     ;; There may be exceptions, such as race conditions, so if the client still
+     ;; receives a 429 error (too many requests) then the client will wait and retry.
+
+     (define (sync-and-reset limit)
+       (define evt (unbox limit))
+       (sync evt)
+       (unless (box-cas! limit evt always-evt)
+         (sync-and-reset limit)))
+
+     ;; wait for the global rate limit
+     (define global-limit (http-client-global-limit http-client))
+     (sync-and-reset global-limit)
+
+     ;; wait for the rate limit of the current route
+     (define ratelimits (http-client-ratelimits http-client))
+     (define route-limit-evt (hash-ref! ratelimits route (thunk (box always-evt))))
+     (sync-and-reset route-limit-evt)
+
+     ;; make up to 5 attempts to run the route
+     (let retry ([tries 5])
+       (when (<= tries 0)
+         (error 'run-route "Ran out of attempts on route: ~a" route))
+       (define resp (apply-route http-client route kws kwargs))
+       (match resp
+         [(response #:status-code 502)
+          (sleep (* 2 (- 6 tries)))
+          (retry (sub1 tries))]
+         [(response #:status-code 429)
+          (define retry-after-ms
+            (* 1000
+               ((compose string->number bytes->string/utf-8)
+                (or (response-headers-ref resp 'Retry-After) #"0"))))
+          (define next-attempt-time (+ (current-inexact-milliseconds) retry-after-ms))
+          (log-discord-info "Hit 429 ratelimit ~a retrying in ~a ms" route retry-after-ms)
+          (let* ([globally (hash-ref (response-json resp) 'global #f)]
+                 [next-evt-box (if globally global-limit route-limit-evt)])
+            (set-box! next-evt-box (alarm-evt next-attempt-time))
+            (sync-and-reset next-evt-box))
+          (retry (sub1 tries))]
+         [(response #:body body
+                    #:status-code code)
+          #:when (>= code 400)
+          (define json (response-json resp))
+          (raise (exn:fail:network:http:discord
+                  (format "Discord gave us an error: ~s" body)
+                  (current-continuation-marks) code
+                  (hash-ref json 'code null)
+                  (hash-ref json 'message null)))]
+         [_
+          (define remaining
+            ((compose string->number bytes->string/utf-8)
+             (or (response-headers-ref resp 'X-RateLimit-Remaining) #"1")))
+          (when (<= remaining 0)
+            (define reset-after-s
+              ((compose string->number bytes->string/utf-8)
+               (or (response-headers-ref resp 'X-RateLimit-Reset-After) #"0")))
+            (define delta-ms (* 1000 reset-after-s))
+            (define route-next-use (+ (current-inexact-milliseconds) delta-ms))
+            (log-discord-info "Setting ratelimit on ~a for ~a ms" route delta-ms)
+            (set-box! route-limit-evt (alarm-evt route-next-use)))
+          (response-json resp)])))))
 
 (define-syntax (define/endpoint stx)
   (define-splicing-syntax-class kwarg-pair
@@ -183,25 +185,13 @@
         process-expr:process-expr
         body:expr ...
         run-args:kwarg-pair ...)
-     (let ()
-       (define (find-param sym)
-         (let loop ([params (syntax-e #'params)])
-           (if (pair? params)
-               (let try-el ([el (syntax-e (car params))])
-                 (cond [(eq? el sym) (car params)]
-                       [(pair? el) (try-el (syntax-e (car el)))]
-                       [else (loop (cdr params))]))
-               #f)))
-       (quasisyntax/loc stx
-         (define (name client . params)
-           body ...
-           #,((datum process-expr.wrap)
-              #`(run-route (make-route method path ...
-                                       #:channel-id #,(find-param 'channel-id)
-                                       #:guild-id #,(find-param 'guild-id)
-                                       #:webhook-id #,(find-param 'webhook-id))
-                           (client-http-client client)
-                           (~@ run-args.kw run-args.arg) ...)))))]))
+     (quasisyntax/loc stx
+       (define (name client . params)
+         body ...
+         #,((datum process-expr.wrap)
+            #`(run-route (make-route method 'method path ...)
+                         (client-http-client client)
+                         (~@ run-args.kw run-args.arg) ...))))]))
 
 ;; CHANNEL ENDPOINTS
 
@@ -232,7 +222,8 @@
 (define/endpoint (get-channel-message _client channel-id message-id)
   (get "channels" channel-id "messages" message-id))
 
-(define/endpoint (create-message _client channel-id
+(define/endpoint (create-message _client
+                                 channel-id
                                  [content ""]
                                  #:allowed-mentions [mentions #f]
                                  #:reply-to [reference #f]

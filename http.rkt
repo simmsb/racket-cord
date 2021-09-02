@@ -186,24 +186,16 @@
         body:expr ...
         run-args:kwarg-pair ...)
      (quasisyntax/loc stx
-       (define (name client . params)
-         body ...
-         #,((datum process-expr.wrap)
-            #`(run-route (make-route method 'method path ...)
-                         (client-http-client client)
-                         (~@ run-args.kw run-args.arg) ...))))]))
+       (begin
+         (provide name)
+         (define (name client . params)
+           body ...
+           #,((datum process-expr.wrap)
+              #`(run-route (make-route method 'method path ...)
+                           (client-http-client client)
+                           (~@ run-args.kw run-args.arg) ...)))))]))
 
 ;; CHANNEL ENDPOINTS
-
-(provide get-channel modify-channel delete-channel
-         get-channel-messages get-channel-message
-         create-message edit-message delete-message bulk-delete-messages
-         create-reaction delete-own-reaction delete-user-reaction get-reactions delete-all-reactions
-         edit-channel-permissions delete-channel-permission
-         get-channel-invites create-channel-invite
-         trigger-typing-indicator
-         get-pinned-messages add-pinned-channel-message delete-pinned-channel-message
-         group-dm-add-recipient group-dm-remove-recipient)
 
 (define/endpoint (get-channel _client channel-id)
   (get "channels" channel-id))
@@ -330,9 +322,6 @@
 
 ;; EMOJI ENDPOINTS
 
-(provide list-guild-emoji get-guild-emoji create-guild-emoji
-         modify-guild-emoji delete-guild-emoji)
-
 (define/endpoint (list-guild-emoji _client guild-id)
   (get "guilds" guild-id "emojis"))
 
@@ -356,18 +345,6 @@
   (delete "guilds" guild-id "emojis" emoji-id))
 
 ;; GUILD ENDPOINTS
-
-(provide get-guild modify-guild delete-guild
-         get-guild-channels create-guild-channel modify-guild-channel-permissions
-         get-guild-member list-guild-members add-guild-member modify-guild-member remove-guild-member
-         modify-user-nick
-         add-guild-member-role remove-guild-member-role
-         get-guild-bans create-guild-ban remove-guild-ban
-         get-guild-roles create-guild-role modify-guild-role modify-guild-role-positions delete-guild-role
-         get-guild-prune-count begin-guild-prune
-         get-guild-invites
-         get-guild-integrations create-guild-integration modify-guild-integration delete-guild-integrations sync-guild-integrations
-         get-guild-embed modify-guild-embed)
 
 (define/endpoint (get-guild _client guild-id)
   (get "guilds" guild-id))
@@ -487,10 +464,6 @@
 
 ;; USER ENDPOINTS
 
-(provide get-current-user get-user modify-current-user
-         get-current-user-guilds leave-guild
-         get-user-dms create-dm create-group-dm)
-
 (define/endpoint (get-current-user _client)
   (get "users" "@me"))
 
@@ -531,12 +504,6 @@
   #:data (json-payload data))
 
 ;; WEBHOOK ENDPOINTS
-(provide create-webhook
-         get-channel-webhooks get-guild-webhooks
-         get-webhook get-webhook-with-token
-         modify-webhook modify-webhook-with-token
-         delete-webhook delete-webhook-with-token
-         execute-webhook)
 
 (define/endpoint (create-webhook _client channel-id name avatar avatar-type)
   (post "channels" channel-id "webhooks")

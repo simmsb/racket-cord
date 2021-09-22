@@ -2,7 +2,8 @@
 
 (require (only-in racket/function thunk)
          (only-in racket/hash hash-union)
-         (only-in racket/string string-replace)
+         (only-in racket/string string-replace string-trim)
+         (only-in racket/exn exn->string)
          "data.rkt"
          "logger.rkt")
 
@@ -16,7 +17,8 @@
     (log-discord-debug "DISPATCHING EVENT: ~a" type)
     (with-handlers ([exn:fail?
                      (lambda (v)
-                       (log-discord-warning "Event ~a ERRORED with: ~a" type v))])
+                       (log-discord-warning "Event ~a ERRORED with: ~a"
+                                            type (string-trim (exn->string v))))])
       (let ([client (ws-client-client ws-client)]
             [events (client-events (ws-client-client ws-client))]
             [raw-evt (string->symbol (string-downcase (format "raw-~a" (string-replace type "_" "-"))))])

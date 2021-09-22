@@ -4,8 +4,7 @@
                "http-easy"
                "rfc6455"
                "rackunit-lib"
-               "scribble-lib"
-               "srfi-lite-lib"))
+               "scribble-lib"))
 (define build-deps '("scribble-lib" "racket-doc"))
 (define scribblings '(("scribblings/racket-cord.scrbl" ())))
 (define pkg-desc "A racket wrapper for the discord API.")

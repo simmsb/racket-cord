@@ -51,7 +51,7 @@
 (define (discord-url . parts)
   (apply ~a "/api/v8" parts #:separator "/"))
 
-(define gateway-params "/?v=8&encoding=json")
+(define gateway-params "/?v=9&encoding=json")
 
 (struct route (method method-name path) #:transparent
   #:methods gen:custom-write

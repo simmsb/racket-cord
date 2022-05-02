@@ -181,10 +181,10 @@
              #:attr wrap (lambda (stx) stx)])
   (syntax-parse stx
     [(_ (name:id client:id . params)
-        [method path ...]
-        process-expr:process-expr
-        body:expr ...
-        run-args:kwarg-pair ...)
+        [method path ...] ;; builds the request path, can use the params
+        process-expr:process-expr ;; an expression to pass the response through before returning to the caller
+        body:expr ... ;; arbitrary code to run before the request
+        run-args:kwarg-pair ...) ;; extra query params
      (quasisyntax/loc stx
        (begin
          (provide name)

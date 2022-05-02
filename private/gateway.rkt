@@ -31,18 +31,18 @@
 #|
 Architecture:
 - Every ws-client instance represents one shard, and is associated with one permanently
-  running master thread that is only terminated when the entire shard is stopped.
+running master thread that is only terminated when the entire shard is stopped.
 - Every ws-client is further associated with at most one receive thread and at most
-  one heartbeater thread at all times. These threads are treated as cheap and transient.
+one heartbeater thread at all times. These threads are treated as cheap and transient.
 - Whenever the receive thread or heartbeater thread notice something is wrong, they send
-  a pair '("error msg" . resumable) to the master thread via the stop-channel.
+a pair '("error msg" . resumable) to the master thread via the stop-channel.
 - When the master thread notices either a value on the stop-channel (one of the threads
-  asked to reconnect), or one of the threads died (unexpected crash), it will clean up,
-  close the socket, sleep briefly, then start another connection.
+asked to reconnect), or one of the threads died (unexpected crash), it will clean up,
+close the socket, sleep briefly, then start another connection.
 - If the error is specified to be nonresumable, the session and sequence numbers are cleared to force
-  a fresh IDENTIFY handshake instead of a RESUME next reconnection.
+a fresh IDENTIFY handshake instead of a RESUME next reconnection.
 - The ws-client does not hold onto its master thread, the caller (upper level discord client)
-  is the one responsible for terminating it by sending it a break.
+is the one responsible for terminating it by sending it a break.
 |#
 
 (define (new-ws-client parent shard-id ws-url)
@@ -119,8 +119,8 @@ Architecture:
 
         ; wait for a known session termination or unexpected death of one of the threads
         (let* ([result (sync (ws-client-heartbeat-thread client)
-                            (ws-client-recv-thread client)
-                            (ws-client-stop-channel client))]
+                             (ws-client-recv-thread client)
+                             (ws-client-stop-channel client))]
                [resumable (match result
                             [(== (ws-client-heartbeat-thread client))
                              (log-discord-error "Heartbeat thread died unexpectedly")
@@ -134,8 +134,8 @@ Architecture:
 
           (disconnect client)
           (when (not resumable)
-              (set-ws-client-seq! client #f)
-              (set-ws-client-session-id! client #f))
+            (set-ws-client-seq! client #f)
+            (set-ws-client-session-id! client #f))
           (sleep (random 1 5))
           (loop)))))))
 

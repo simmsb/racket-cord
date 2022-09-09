@@ -214,33 +214,41 @@
 (define/endpoint (get-channel-message _client channel-id message-id)
   (get "channels" channel-id "messages" message-id))
 
-(define/endpoint (create-message _client
-                                 channel-id
-                                 [content ""]
-                                 #:allowed-mentions [mentions #f]
-                                 #:reply-to [reference #f]
-                                 #:embed [embed #f]
-                                 #:tts [tts #f]
-                                 #:file [attachment #f])
+(define/endpoint (create-message
+                  _client
+                  channel-id
+                  [content ""]
+                  #:allowed-mentions [mentions #f]
+                  #:reply-to [reference #f]
+                  #:tts [tts #f]
+                  #:components [components null]
+                  #:sticker-ids [sticker-ids null]
+                  #:embed [single-embed #f] #:embeds [embeds null]
+                  #:file [attachment #f])
   (post "channels" channel-id "messages")
-  #:data
-  (let ([data (make-hash)])
-    (when embed
-      (hash-set! data 'embed embed))
-    (when reference
-      (hash-set! data 'message_reference reference))
-    (when mentions
-      (hash-set! data 'allowed_mentions mentions))
-    (hash-set! data 'tts tts)
-    (hash-set! data 'content content)
+  (define data (make-hash))
+  (when reference (hash-set! data 'message_reference reference))
+  (when mentions (hash-set! data 'allowed_mentions mentions))
+  (unless (null? components) (hash-set! data 'components components))
+  (unless (null? sticker-ids) (hash-set! data 'sticker_ids sticker-ids))
+  (hash-set! data 'tts tts)
+  (hash-set! data 'content content)
+  (define all-embeds
+    (if single-embed
+        (cons single-embed embeds)
+        embeds))
+  (unless (null? all-embeds)
+    (hash-set! data 'embeds all-embeds))
+  (define payload
     (if attachment
         (multipart-payload
+         (field-part "payload_json" (jsexpr->string data) #"application/json")
          (file-part "file"
                     (open-input-bytes (attachment-data attachment))
                     (attachment-name attachment)
-                    (attachment-type attachment))
-         (field-part "payload_json" (jsexpr->string data) #"application/json"))
-        (json-payload data))))
+                    (attachment-type attachment)))
+        (json-payload data)))
+  #:data payload)
 
 (define/endpoint (edit-message _client
                                channel-id

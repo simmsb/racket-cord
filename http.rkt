@@ -30,7 +30,7 @@
   (make-keyword-procedure
    (lambda (kws kwargs req uri #:headers [headers (hasheq)])
      (keyword-apply req kws kwargs
-                    (list (string-append "https://discordapp.com" uri))
+                    (list (string-append "https://discord.com" uri))
                     #:headers (hash-set*
                                headers
                                'authorization token

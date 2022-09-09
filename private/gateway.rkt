@@ -204,7 +204,7 @@ is the one responsible for terminating it by sending it a break.
                 [(== op-reconnect)
                  (channel-put (ws-client-stop-channel client) '("Received opcode reconnect" . #t))]
                 [(== op-invalid-session)
-                 (channel-put (ws-client-stop-channel client) '("Received invalid session" . d))]
+                 (channel-put (ws-client-stop-channel client) (cons "Received invalid session" d))]
                 [(== op-hello)
                  (thread-send (ws-client-heartbeat-thread client)
                               (/ (hash-ref d 'heartbeat_interval) 1000))

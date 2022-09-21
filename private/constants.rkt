@@ -1,54 +1,73 @@
 #lang racket/base
 
+(require (only-in "utils.rkt" bitflags))
 (provide (all-defined-out))
 
-(define intent-guilds (arithmetic-shift 1 0))
-(define intent-guild-members (arithmetic-shift 1 1))
-(define intent-guild-bans (arithmetic-shift 1 2))
-(define intent-guild-emojis (arithmetic-shift 1 3))
-(define intent-guild-integrations (arithmetic-shift 1 4))
-(define intent-guild-webhooks (arithmetic-shift 1 5))
-(define intent-guild-invites (arithmetic-shift 1 6))
-(define intent-guild-voice-states (arithmetic-shift 1 7))
-(define intent-guild-presences (arithmetic-shift 1 8))
-(define intent-guild-messages (arithmetic-shift 1 9))
-(define intent-guild-message-reactions (arithmetic-shift 1 10))
-(define intent-guild-message-typing (arithmetic-shift 1 11))
-(define intent-direct-messages (arithmetic-shift 1 12))
-(define intent-direct-message-reactions (arithmetic-shift 1 13))
-(define intent-direct-message-typing (arithmetic-shift 1 14))
+;; https://discord.com/developers/docs/topics/gateway#gateway-intents
+(bitflags intent
+          guilds
+          guild-members
+          guild-bans
+          guild-emojis-and-stickers
+          guild-integrations
+          guild-webhooks
+          guild-invites
+          guild-voice-states
+          guild-presences
+          guild-messages
+          guild-message-reactions
+          guild-message-typing
+          direct-messages
+          direct-message-reactions
+          direct-message-typing
+          message-content
+          guild-scheduled-events
+          (auto-moderation-configuration 20)
+          auto-moderation-execution)
 
-(define permission-create-instant-invite #x00000001)
-(define permission-kick-members #x00000002)
-(define permission-ban-members #x00000004)
-(define permission-administrator #x00000008)
-(define permission-manage-channels #x00000010)
-(define permission-manage-guild #x00000020)
-(define permission-add-reactions #x00000040)
-(define permission-view-audit-log #x00000080)
-(define permission-priority-speaker #x00000100)
-(define permission-stream #x00000200)
-(define permission-view-channel #x00000400)
-(define permission-send-messages #x00000800)
-(define permission-send-tts-messages #x00001000)
-(define permission-manage-messages #x00002000)
-(define permission-embed-links #x00004000)
-(define permission-attach-files #x00008000)
-(define permission-read-message-history #x00010000)
-(define permission-mention-everyone #x00020000)
-(define permission-use-external-emojis #x00040000)
-(define permission-view-guild-insights #x00080000)
-(define permission-connect #x00100000)
-(define permission-speak #x00200000)
-(define permission-mute-members #x00400000)
-(define permission-deafen-members #x00800000)
-(define permission-move-members #x01000000)
-(define permission-use-vad #x02000000)
-(define permission-change-nickname #x04000000)
-(define permission-manage-nicknames #x08000000)
-(define permission-manage-roles #x10000000)
-(define permission-manage-webhooks #x20000000)
-(define permission-manage-emojis #x40000000)
+;; https://discord.com/developers/docs/topics/permissions#permissions
+(bitflags permission
+          create-instant-invite
+          kick-members
+          ban-members
+          administrator
+          manage-channels
+          manage-guild
+          add-reactions
+          view-audit-log
+          priority-speaker
+          stream
+          view-channel
+          send-messages
+          send-tts-messages
+          manage-messages
+          embed-links
+          attach-files
+          read-message-history
+          mention-everyone
+          use-external-emojis
+          view-guild-insights
+          connect
+          speak
+          mute-members
+          deafen-members
+          move-members
+          use-vad
+          change-nickname
+          manage-nicknames
+          manage-roles
+          manage-webhooks
+          manage-emojis-and-stickers
+          use-application-commands
+          request-to-speak
+          manage-events
+          manage-threads
+          create-public-threads
+          create-private-threads
+          use-external-stickers
+          send-messages-in-threads
+          use-embedded-activities
+          moderate-members)
 
 (define activity-type-game 0)
 (define activity-type-streaming 1)

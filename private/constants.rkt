@@ -25,6 +25,9 @@
           (auto-moderation-configuration 20)
           auto-moderation-execution)
 
+;; Legacy name
+(define intent-guild-emojis intent-guild-emojis-and-stickers)
+
 ;; https://discord.com/developers/docs/topics/permissions#permissions
 (bitflags permission
           create-instant-invite
@@ -68,6 +71,8 @@
           send-messages-in-threads
           use-embedded-activities
           moderate-members)
+
+(define permission-manage-emojis permission-manage-emojis-and-stickers)
 
 (define activity-type-game 0)
 (define activity-type-streaming 1)

@@ -8,5 +8,5 @@
 (define build-deps '("scribble-lib" "racket-doc"))
 (define scribblings '(("scribblings/racket-cord.scrbl" ())))
 (define pkg-desc "A racket wrapper for the discord API.")
-(define version "0.2.0")
+(define version "0.2")
 (define pkg-authors '(Ben Simms))

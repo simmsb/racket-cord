@@ -262,7 +262,7 @@
   (delete "channels" channel-id "messages" message-id))
 
 (define/endpoint (create-reaction _client channel-id message-id emoji)
-  (post "channels" channel-id "messages" message-id "reactions" emoji "@me"))
+  (put "channels" channel-id "messages" message-id "reactions" emoji "@me"))
 
 (define/endpoint (delete-own-reaction _client channel-id message-id emoji)
   (delete "channels" channel-id "messages" message-id "reactions" emoji "@me"))

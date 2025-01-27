@@ -260,9 +260,22 @@
                                channel-id
                                message-id
                                #:content [content null]
-                               #:embed [embed null])
+                               #:embed [single-embed null]
+                               #:embeds [embeds #f])
   (patch "channels" channel-id "messages" message-id)
-  #:params (filter-null `((content . ,content) (embed . ,embed))))
+  (define data (make-hash))
+  (cond
+    [embeds
+     (define all-embeds
+       (if (null? single-embed)
+           embeds
+           (cons single-embed embeds)))
+     (hash-set! data 'embeds all-embeds)]
+    [(not (null? single-embed))
+     (hash-set! data 'embeds (list single-embed))])
+  (unless (null? content)
+    (hash-set! data 'content content))
+  #:data (json-payload data))
 
 (define/endpoint (delete-message _client channel-id message-id)
   (delete "channels" channel-id "messages" message-id))

@@ -270,7 +270,8 @@
                                message-id
                                #:content [content null]
                                #:embed [single-embed null]
-                               #:embeds [embeds #f])
+                               #:embeds [embeds #f]
+                               #:attachments [attachments #f])
   (patch "channels" channel-id "messages" message-id)
   (define data (make-hash))
   (cond
@@ -284,6 +285,8 @@
      (hash-set! data 'embeds (list single-embed))])
   (unless (null? content)
     (hash-set! data 'content content))
+  (when attachments
+    (hash-set! data 'attachments attachments))
   #:data (json-payload data))
 
 (define/endpoint (delete-message _client channel-id message-id)

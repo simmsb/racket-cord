@@ -227,13 +227,7 @@
                   #:file [attachment #f])
   (post "channels" channel-id "messages")
   (define data (make-hash))
-  (when reference
-    (hash-set!
-     data
-     'message_reference
-     (hasheq
-      'type 0 ; DEFAULT message reference type, used for replies
-      'message_id reference)))
+  (when reference (hash-set! data 'message_reference reference))
   (when mentions (hash-set! data 'allowed_mentions mentions))
   (unless (null? components) (hash-set! data 'components components))
   (unless (null? sticker-ids) (hash-set! data 'sticker_ids sticker-ids))

@@ -224,8 +224,7 @@
                   #:components [components null]
                   #:sticker-ids [sticker-ids null]
                   #:embed [single-embed #f] #:embeds [embeds null]
-                  #:file [single-attachment #f]
-                  #:files [attachments null])
+                  #:file [attachment #f])
   (post "channels" channel-id "messages")
   (define data (make-hash))
   (when reference
@@ -246,23 +245,15 @@
         embeds))
   (unless (null? all-embeds)
     (hash-set! data 'embeds all-embeds))
-  (define all-attachments
-    (if single-attachment
-        (cons single-attachment attachments)
-        attachments))
   (define payload
-    (cond
-      [(null? all-attachments)
-       (json-payload data)]
-      [else
-       (define files
-         (for/list ([attachment all-attachments] [n (in-naturals)])
-           (file-part (format "files[~a]" n)
-                      (open-input-bytes (attachment-data attachment))
-                      (attachment-name attachment)
-                      (attachment-type attachment))))
-       (define json (field-part "payload_json" (jsexpr->string data) #"application/json"))
-       (apply multipart-payload json files)]))
+    (if attachment
+        (multipart-payload
+         (field-part "payload_json" (jsexpr->string data) #"application/json")
+         (file-part "file"
+                    (open-input-bytes (attachment-data attachment))
+                    (attachment-name attachment)
+                    (attachment-type attachment)))
+        (json-payload data)))
   #:data payload)
 
 (define/endpoint (edit-message _client

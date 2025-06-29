@@ -2,48 +2,21 @@
 @require[scribble/extract]
 @require[@for-label[racket-cord
                     json
-                    net/rfc6455]
-                   @for-label[@except-in[racket/base member]]]
+                    net/rfc6455
+                   @except-in[racket/base member]
+				   racket/contract/base]]
 
 @title{racket-cord: Racket discord library}
 @author{@author+email["Ben Simms" "ben@bensimms.moe"]}
 
 @defmodule[racket-cord]
 
-@section{Example}
+@section{Quick Start}
 
-Example usage of the library:
-
-@racketblock[
-(require racket-cord)
-
-(define bot-token (getenv "BOT_TOKEN"))
-
-(define myclient (make-client bot-token #:auto-shard #t #:intents (list intent-guilds intent-guild-messages)))
-
-(on-event
-  'raw-message-create myclient
-  (lambda (_ws-client client payload)
-    (unless (string=? (hash-ref (hash-ref payload 'author) 'id) ; dont reply to ourselves
-                      (user-id (client-user client)))
-      (cond
-        [(string-prefix? (hash-ref payload 'content) "!echo ")
-         (http:create-message client (hash-ref payload 'channel_id)
-                              (string-trim (hash-ref  payload 'content) "!echo " #:right? #f))]))))
-
-;; logging stufff
-
-(define dr (make-log-receiver discord-logger 'debug))
-
-(thread
-  (thunk
-    (let loop ()
-      (let ([v (sync dr)])
-        (printf "[~a] ~a\n" (vector-ref v 0)
-                (vector-ref v 1)))
-      (loop))))
-
-(start-client myclient)]
+@itemlist[@item{Create a client using @racket[make-client]}
+          @item{Register websocket event handlers using @racket[on-event]}
+          @item{Start the client and begin receiving events using @racket[start-client]}
+		  @item{Make auxiliary HTTP calls using @seclink["http"]{provided utility functions}}]
 
 @section{Client}
 
@@ -55,162 +28,17 @@ Example usage of the library:
 @defstruct*[
   client
   ([shards list?]
-  [user user?]
-  [guilds (hash/c string? guild?)]
-  [private-channels (hash/c string? dm-channel?)]
+  [shard-threads any/c]
+  [user (hash/c symbol? any/c)]
   [events (hash/c symbol? procedure?)]
-  [http-client http:http-client?]
+  [http-client any/c]
   [token string?]
+  [intents any/c]
   [running semaphore?])
   #:mutable
   #:transparent]{
 Stores the state of the client.
 }
-
-@section{Data Models}
-
-Note that these have rotted significantly at the time of writing and are likely to be removed.
-
-@defstruct*[
-  guild
-  ([shard-id integer?]
-  [id string?]
-  [name string?]
-  [icon string?]
-  [splash string?]
-  [owner-id string?]
-  [region string?]
-  [afk-channel-id string?]
-  [afk-timeout integer?]
-  [embed-enabled boolean?]
-  [embed-channel-id string?]
-  [verification-level integer?]
-  [default-message-notifications integer?]
-  [explicit-content-filter integer?]
-  [roles (hash/c string? role?)]
-  [emojis (hash/c string? emoji?)]
-  [features (listof string?)]
-  [mfa-level integer?]
-  [application-id string?]
-  [widget-enabled boolean?]
-  [widget-channel-id string?]
-  [joined-at string?]
-  [large boolean?]
-  [member-count integer?]
-  [voice-states jsexpr?]
-  [members (hash/c string? member?)]
-  [channels (hash/c string? guild-channel?)]
-  [presences (listof jsexpr?)])]
-
-@defstruct*[
-  guild-channel
-  ([id string?]
-  [type integer?]
-  [guild-id string?]
-  [position integer?]
-  [permission-overwrites (listof jsexpr?)]
-  [name string?]
-  [topic string?]
-  [nsfw boolean?]
-  [last-message-id string?]
-  [bitrate integer?]
-  [user-limit integer?]
-  [parent-id string?])]{
-  An object representing a guild text channel or a guild voice channel.
-  Fields that only exist for voice channels will be @racket[null] for a text channel, and vice-versa.
-}
-
-@defstruct*[
-  dm-channel
-  ([id string?]
-  [type integer?]
-  [name string?]
-  [last-message-id string?]
-  [icon string?]
-  [recipients string?]
-  [owner-id string?]
-  [application-id string?])]
-
-@defstruct*[
-  user
-  ([id string?]
-  [username string?]
-  [discriminator string?]
-  [avatar string?]
-  [bot boolean?]
-  [mfa-enabled boolean?])]
-
-@defstruct*[
-  member
-  ([user user?]
-  [nick (or/c string? null?)]
-  [roles (listof string?)]
-  [joined-at string?]
-  [deaf boolean?]
-  [mute boolean?]
-  [status (or/c string? null?)]
-  [game (or/c game? null?)])]
-
-@defstruct*[
-  message
-  ([id string?]
-  [channel-id string?]
-  [author (or/c user? null?)]
-  [content string?]
-  [timestamp string?]
-  [edited-timestamp (or/c string? null?)]
-  [tts boolean?]
-  [mention-everyone boolean?]
-  [mentions (listof user?)]
-  [mention-roles (listof role?)]
-  [attachments jsexpr?]
-  [embeds jsexpr?]
-  [reactions jsexpr?]
-  [pinned boolean?]
-  [type integer?])]
-
-@defstruct*[
-  role
-  ([id string?]
-  [name string?]
-  [color integer?]
-  [hoist boolean?]
-  [position integer?]
-  [permissions integer?]
-  [managed boolean?]
-  [mentionable boolean?])]
-
-@defstruct*[
-  emoji
-  ([id string?]
-  [name string?]
-  [roles (listof string?)]
-  [user (or/c user? null?)]
-  [require-colons boolean?]
-  [managed boolean?])]
-
-@defstruct*[
-  game
-  ([name string?]
-  [type integer?]
-  [url string?])]
-
-@defstruct*[
-  invite
-  ([code string?]
-  [guild-id string?]
-  [channel-id string?])]
-
-@defstruct*[
-  webhook
-  ([id string?]
-  [guild-id (or/c string? null?)]
-  [channel-id string?]
-  [user (or/c user?)]
-  [name (or/c string? null?)]
-  [avatar (or/c string? null?)]
-  [token string?])]
-
 
 @section[#:tag "events"]{Events}
 
@@ -239,27 +67,7 @@ The signature of @racket{callback} should be as follows.
 
 where @racket[data] is the raw @tt{d} payload received from the Discord gateway.
 
-@section{Miscellaneous functions}
-
-@defproc[(get-channels [client client?]) (listof guild-channel?)]
-
-@defproc[(get-channel [client client?]
-                      [id string?]) (or/c guild-channel? null?)]{
-Get a channel by id. Returns @racket[null] on failure.
-}
-
-@defproc[(get-guild [client client?]
-                    [id string?]) (or/c guild? null?)]{
-Get a guild by id. Returns @racket[null] on failure.
-}
-
-@defproc[(get-member [client client?]
-                     [member-id string?]
-                     [guild-id string?]) (or/c member? null?)]{
-Get a member of a guild by id. Returns null on failure.
-}
-
-@section{HTTP}
+@section[#:tag "http"]{HTTP}
 
 HTTP requests are defined here. Ratelimiting is handled for you by the library.
 Requests that fail raise a @racket[exn:fail:network:http:discord?] exception.
@@ -652,11 +460,3 @@ Request a channel.
 @section{Additional}
 
 @defthing[discord-logger logger?]{Logger of discord events in the library.}
-
-@defstruct*[
-  http:http-client
-  ([requester requester?]
-  [global-lock semaphore?]
-  [ratelimits (hash/c string? semaphore?)])]{
-Internal http client of the library, holds ratelimiting state.
-}

@@ -27,6 +27,15 @@ Typed wrappers or cached client-side state should not be difficult to implement 
 this library via the gateway events, if someone is interested in subjecting themselves to that pain.
 If you make one, let us know and we will feature it here. :)
 
+Edit 2025/06/28: It appears Discord has finally published OpenAPI bindings at https://github.com/discord/discord-api-spec/blob/main/specs/openapi.json
+
+This means it's probably feasible to consider automatic generation of the HTTP endpoint
+methods from the OpenAPI spec. I do not know of and have not evaluated any OpenAPI
+generators for Racket, and the raw low-level interface works for my usecase, so if you
+would like to contribute this, patches to auto-generate the HTTP endpoint code are welcome.
+
+Cached client state is probably still out of this library's scope.
+
 # Sample Projects
 
 * R16: A Racket trick bot for Discord - https://sr.ht/~williewillus/r16

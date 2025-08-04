@@ -328,6 +328,37 @@
 (define/endpoint (group-dm-remove-recipient _client channel-id user-id)
   (delete "channels" channel-id "recipients" user-id))
 
+;; THREAD ENDPOINTS
+
+(define/endpoint (start-thread-with-message _client channel-id message-id name)
+  (post "channels" channel-id "messages" message-id "threads")
+  #:data (json-payload (hash 'name name)))
+
+(define/endpoint (get-thread _client thread-id)
+  (get "channels" thread-id))
+
+(define/endpoint (list-active-threads _client channel-id)
+  (get "channels" channel-id "threads" "active"))
+
+(define/endpoint (join-thread _client thread-id)
+  (post "channels" thread-id "thread-members" "@me"))
+
+(define/endpoint (leave-thread _client thread-id)
+  (delete "channels" thread-id "thread-members" "@me"))
+
+(define/endpoint (add-thread-member _client thread-id user-id)
+  (put "channels" thread-id "thread-members" user-id))
+
+(define/endpoint (remove-thread-member _client thread-id user-id)
+  (delete "channels" thread-id "thread-members" user-id))
+
+(define/endpoint (list-thread-members _client thread-id)
+  (get "channels" thread-id "thread-members"))
+
+(define/endpoint (edit-thread _client thread-id data)
+  (patch "channels" thread-id)
+  #:data (json-payload data))
+
 ;; EMOJI ENDPOINTS
 
 (define/endpoint (list-guild-emoji _client guild-id)

@@ -184,6 +184,56 @@ Request a channel.
                                              [channel-id string?]
                                              [message-id string?]) jsexpr?]
 
+@defproc[(http:start-thread-with-message [client client?]
+                                         [channel-id string?]
+                                         [message-id string?]
+                                         [name string?]) jsexpr?]{
+  Starts a new thread from an existing message in the given channel. Returns the created thread object as a JSON hash.
+}
+
+@defproc[(http:get-thread [client client?]
+                          [thread-id string?]) jsexpr?]{
+  Gets a thread channel by its ID. Returns the thread object as a JSON hash.
+}
+
+@defproc[(http:list-active-threads [client client?]
+                                   [channel-id string?]) jsexpr?]{
+  Lists all active threads in a channel. Returns a hash with a @racket['threads] key containing a list of thread objects.
+}
+
+@defproc[(http:join-thread [client client?]
+                           [thread-id string?]) jsexpr?]{
+  Joins the current user to the specified thread.
+}
+
+@defproc[(http:leave-thread [client client?]
+                            [thread-id string?]) jsexpr?]{
+  Removes the current user from the specified thread.
+}
+
+@defproc[(http:add-thread-member [client client?]
+                                 [thread-id string?]
+                                 [user-id string?]) jsexpr?]{
+  Adds a user to the specified thread.
+}
+
+@defproc[(http:remove-thread-member [client client?]
+                                    [thread-id string?]
+                                    [user-id string?]) jsexpr?]{
+  Removes a user from the specified thread.
+}
+
+@defproc[(http:list-thread-members [client client?]
+                                   [thread-id string?]) jsexpr?]{
+  Lists all members of the specified thread. Returns a list of member objects.
+}
+
+@defproc[(http:edit-thread [client client?]
+                           [thread-id string?]
+                           [data hash?]) jsexpr?]{
+  Edits a thread (modifies the channel). @racket[data] should be a hash of fields to update, such as @racket['name].
+}
+
 @defproc[(http:group-dm-add-recipient [client client?]
                                       [channel-id string?]
                                       [user-id string?]

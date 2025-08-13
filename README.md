@@ -2,7 +2,7 @@
 
 A low-level library for interfacing with Discord using Racket.
 
-Supported Racket version: 8.3 and greater.
+Supported Racket version: 8.4 and greater.
 
 [![Build Status](https://github.com/nitros12/racket-cord/actions/workflows/ci.yml/badge.svg)](https://github.com/nitros12/racket-cord/actions/workflows/ci.yml)
 

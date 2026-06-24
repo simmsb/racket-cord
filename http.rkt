@@ -597,3 +597,61 @@
   (post "webhooks" webhook-id webhook-token)
   #:params `((wait . ,wait))
   #:data (json-payload data))
+
+;; application commands endpoints
+
+(define/endpoint (get-global-application-commands _client application-id)
+  (get "applications" application-id "commands"))
+
+(define/endpoint (create-global-application-command _client application-id data)
+  (post "applications" application-id "commands")
+  #:data (json-payload data))
+
+(define/endpoint (get-global-application-command _client application-id command-id)
+  (get "applications" application-id "commands" command-id))
+
+(define/endpoint (edit-global-application-command _client application-id command-id data)
+  (patch "applications" application-id "commands" command-id)
+  #:data (json-payload data))
+
+(define/endpoint (delete-global-application-command _client application-id command-id)
+  (delete "applications" application-id "commands" command-id))
+
+(define/endpoint (bulk-overwrite-global-application-commands _client application-id data)
+  (put "applications" application-id "commands")
+  #:data (json-payload data))
+
+(define/endpoint (get-guild-application-commands _client application-id guild-id)
+  (get "applications" application-id "guilds" guild-id "commands"))
+
+(define/endpoint (create-guild-application-command _client application-id guild-id data)
+  (post "applications" application-id "guilds" guild-id "commands")
+  #:data (json-payload data))
+
+(define/endpoint (get-guild-application-command _client application-id guild-id command-id)
+  (get "applications" application-id "guilds" guild-id "commands" command-id))
+
+(define/endpoint (edit-guild-application-command _client application-id guild-id command-id data)
+  (patch "applications" application-id "guilds" guild-id "commands" command-id)
+  #:data (json-payload data))
+
+(define/endpoint (delete-guild-application-command _client application-id guild-id command-id)
+  (delete "applications" application-id "guilds" guild-id "commands" command-id))
+
+(define/endpoint (bulk-overwrite-guild-application-commands _client application-id guild-id data)
+  (put "applications" application-id "guilds" guild-id "commands")
+  #:data (json-payload data))
+
+(define/endpoint (get-guild-application-command-permissions _client application-id guild-id)
+  (get "applications" application-id "guilds" guild-id "commands" "permissions"))
+
+(define/endpoint (get-guild-application-command-permission _client application-id guild-id command-id)
+  (get "applications" application-id "guilds" guild-id "commands" command-id "permissions"))
+
+(define/endpoint (edit-guild-application-command-permissions _client application-id guild-id command-id data)
+  (put "applications" application-id "guilds" guild-id "commands" command-id "permissions")
+  #:data (json-payload data))
+
+(define/endpoint (batch-edit-guild-application-command-permissions _client application-id guild-id data)
+  (put "applications" application-id "guilds" guild-id "commands" "permissions")
+  #:data (json-payload data))

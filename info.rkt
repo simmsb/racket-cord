@@ -10,3 +10,4 @@
 (define pkg-desc "A racket wrapper for the discord API.")
 (define version "0.2")
 (define pkg-authors '(Ben Simms))
+(define license 'MIT)

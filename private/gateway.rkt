@@ -152,7 +152,7 @@ is the one responsible for terminating it by sending it a break.
             (set-ws-client-gateway-url! client (get-ws-url-infallible (client-http-client (ws-client-client client)))) ;; This is pretty bad
             (sleep 5)
             (make-ws-conn))
-          (with-handlers ([exn:fail:network?
+          (with-handlers ([exn:fail?
                            (lambda (e)
                              (begin (sleep backoff)
                                     (retry (add1 count)
